@@ -1,5 +1,6 @@
 import type { BuildingTypeId, EntityId, ResearchId, UnitTypeId } from '@shadow-front/shared-types';
 import {
+  BALANCE,
   BUILDABLE,
   BUILDINGS,
   FACTIONS,
@@ -7,6 +8,8 @@ import {
   RESEARCH_IDS,
   TICK_RATE,
   UNITS,
+  availableTo,
+  researchAvailableTo,
 } from '@shadow-front/game-data';
 import type { GameController } from './GameController';
 
@@ -59,6 +62,9 @@ export type SelectionInfo =
         hp: number;
         maxHp: number;
         order: string;
+        rank: number;
+        /** Transports: passengers inside / capacity (null when it cannot carry). */
+        cargo: { count: number; capacity: number } | null;
         weapon: string;
         description: string;
       } | null;
@@ -80,6 +86,13 @@ export type SelectionInfo =
       research: ResearchOption[];
       repairing: boolean;
       damaged: boolean;
+      /** Credits returned if sold now (null when it cannot be sold). */
+      sellValue: number | null;
+      /** Bunkers: garrison / capacity. */
+      cargo: { count: number; capacity: number } | null;
+      level: number;
+      /** Level-2 upgrade: cost and progress (null = not upgrading); null when not upgradable / done. */
+      upgrade: { cost: number; progress: number | null; affordable: boolean } | null;
     };
 
 export interface HudSnapshot {
@@ -97,10 +110,21 @@ export interface HudSnapshot {
   build: BuildOption[];
   army: { units: number; buildings: number };
   points: { owned: number; total: number };
+  /** Capture the Flag only. */
+  ctf: { mine: number; enemy: number; target: number; ownFlag: 'home' | 'taken' | 'dropped' } | null;
+  /** Domination only: our team's score, the best enemy score and the target. */
+  domination: { mine: number; enemy: number; target: number } | null;
+  /** Population used / cap (cap 0 = unlimited). */
+  supply: { used: number; cap: number };
   /** Survival only. `nextIn` is seconds until the next wave (null once all waves are out). */
   survival: { wave: number; total: number; nextIn: number | null; hostiles: number } | null;
-  /** Tutorial only: objectives and the index of the current one (=== steps.length when finished). */
-  tutorial: { index: number; steps: { title: string; hint: string }[] } | null;
+  /** Tutorial / campaign only. `index` = first unfinished objective (=== steps.length when all done). */
+  objectives: {
+    title: string;
+    ordered: boolean;
+    index: number;
+    steps: { title: string; hint: string; done: boolean }[];
+  } | null;
   players: {
     name: string;
     team: number;
@@ -110,19 +134,24 @@ export interface HudSnapshot {
     isAI: boolean;
     raider: boolean;
     you: boolean;
+    id: number;
+    /** A living teammate who can receive credits. */
+    ally: boolean;
   }[];
 }
 
-function orderLabel(o: { type: string; attackMove?: boolean }): string {
+function orderLabel(o: { type: string; attackMove?: boolean; patrol?: unknown }): string {
   switch (o.type) {
     case 'move':
-      return o.attackMove ? 'Attack-moving' : 'Moving';
+      return o.patrol ? 'Patrolling' : o.attackMove ? 'Attack-moving' : 'Moving';
     case 'attack':
       return 'Attacking';
     case 'hold':
       return 'Holding position';
     case 'retreat':
       return 'Retreating';
+    case 'board':
+      return 'Getting in';
     default:
       return 'Idle';
   }
@@ -163,7 +192,7 @@ export function snapshotHud(c: GameController): HudSnapshot {
       const own = b.owner === pid;
       const options: UnitOption[] = b.def.produces
         ? (Object.keys(UNITS) as UnitTypeId[])
-            .filter((t) => UNITS[t].producedBy === b.type)
+            .filter((t) => UNITS[t].producedBy === b.type && availableTo(t, me.faction))
             .map((t) => {
               const def = UNITS[t];
               const cost = w.unitCost(pid, t);
@@ -174,9 +203,11 @@ export function snapshotHud(c: GameController): HudSnapshot {
                   ? `Requires ${def.requires.map((r) => BUILDINGS[r].name).join(', ')}`
                   : b.queue.length >= 5
                     ? 'Queue full'
-                    : me.credits < cost
-                      ? 'Insufficient credits'
-                      : null;
+                    : w.overCap(pid, t)
+                      ? `Unit limit (${w.unitCap})`
+                      : me.credits < cost
+                        ? 'Insufficient credits'
+                        : null;
               return {
                 type: t,
                 name: def.name,
@@ -205,7 +236,7 @@ export function snapshotHud(c: GameController): HudSnapshot {
         options: own ? options : [],
         research:
           own && b.type === 'research-center'
-            ? RESEARCH_IDS.map((id) => {
+            ? RESEARCH_IDS.filter((id) => researchAvailableTo(id, me.faction)).map((id) => {
                 const def = RESEARCH[id];
                 const done = w.hasResearch(pid, id);
                 const elsewhere = w.playerBuildings(pid).some((o) => o !== b && o.research?.id === id);
@@ -236,6 +267,20 @@ export function snapshotHud(c: GameController): HudSnapshot {
             : [],
         repairing: b.repairing,
         damaged: b.complete && b.hp < b.maxHp,
+        cargo: b.def.garrison ? { count: b.passengers.length, capacity: b.def.garrison.capacity } : null,
+        level: b.level,
+        upgrade:
+          own && b.complete && b.def.upgrade && b.level < 2
+            ? {
+                cost: b.def.upgrade.cost,
+                progress: b.upgrading === null ? null : b.upgrading / b.def.upgrade.time,
+                affordable: me.credits >= b.def.upgrade.cost,
+              }
+            : null,
+        sellValue:
+          own && b.complete && b.type !== 'headquarters'
+            ? Math.round(b.def.cost * BALANCE.sellRefund * (b.hp / b.maxHp))
+            : null,
       };
     } else {
       const units = sel.filter((e) => e.kind === 'unit');
@@ -260,6 +305,10 @@ export function snapshotHud(c: GameController): HudSnapshot {
               hp: Math.ceil(one.hp),
               maxHp: one.maxHp,
               order: orderLabel(one.order),
+              rank: one.rank,
+              cargo: one.def.transport
+                ? { count: one.passengers.length, capacity: one.def.transport.capacity }
+                : null,
               weapon: one.def.weapon
                 ? `${one.def.weapon.type} · ${one.def.weapon.damage} dmg · range ${one.def.weapon.range}`
                 : 'Unarmed',
@@ -284,6 +333,26 @@ export function snapshotHud(c: GameController): HudSnapshot {
     selection,
     build,
     army: { units: w.playerUnits(pid).length, buildings: w.playerBuildings(pid).length },
+    supply: { used: w.supplyUsed(pid), cap: w.unitCap },
+    ctf:
+      w.mission === 'ctf'
+        ? {
+            mine: w.captures.get(me.team) ?? 0,
+            enemy: Math.max(0, ...[...w.captures].filter(([t]) => t !== me.team).map(([, v]) => v)),
+            target: BALANCE.ctfCaptures,
+            ownFlag: ((f) => (!f || f.atHome ? 'home' : f.carrier !== null ? 'taken' : 'dropped'))(
+              w.flags.find((f) => f.team === me.team),
+            ),
+          }
+        : null,
+    domination:
+      w.mission === 'domination'
+        ? {
+            mine: Math.floor(w.scores.get(me.team) ?? 0),
+            enemy: Math.floor(Math.max(0, ...[...w.scores].filter(([t]) => t !== me.team).map(([, v]) => v))),
+            target: BALANCE.dominationTarget,
+          }
+        : null,
     points: { owned: w.points.filter((p) => p.team === me.team).length, total: w.points.length },
     survival: w.survival
       ? {
@@ -296,8 +365,17 @@ export function snapshotHud(c: GameController): HudSnapshot {
           hostiles: w.playerUnits(w.survival.raider).length,
         }
       : null,
-    tutorial: c.tutorial
-      ? { index: c.tutorial.index, steps: c.tutorial.steps.map((s) => ({ title: s.title, hint: s.hint })) }
+    objectives: c.objectives
+      ? {
+          title: c.objectivesTitle,
+          ordered: c.objectives.ordered,
+          index: c.objectives.index,
+          steps: c.objectives.steps.map((s, i) => ({
+            title: s.title,
+            hint: s.hint,
+            done: c.objectives!.done[i],
+          })),
+        }
       : null,
     players: w.players.map((p) => ({
       name: p.name,
@@ -308,6 +386,8 @@ export function snapshotHud(c: GameController): HudSnapshot {
       isAI: p.isAI,
       raider: p.raider,
       you: p.id === pid,
+      id: p.id,
+      ally: p.id !== pid && p.team === me.team && !p.defeated && !p.raider,
     })),
   };
 }

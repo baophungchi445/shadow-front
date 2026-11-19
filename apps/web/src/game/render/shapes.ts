@@ -188,8 +188,46 @@ export function drawBuilding(
       break;
     }
     case 'defense-turret':
-    case 'sam-site': {
+    case 'sam-site':
+    case 'missile-launcher': {
       drawPrism(g, 0.95, 0.95, 10, mix(CONCRETE, team, 0.22), 3);
+      break;
+    }
+    case 'bunker': {
+      const t1 = drawPrism(g, w - 0.2, h - 0.2, 14, shade(mix(CONCRETE, OLIVE, 0.35), 0.9), 3);
+      stripe(g, t1, team);
+      // Firing slits along the two front faces.
+      g.fillStyle(0x15181b, 1);
+      const a = iso(w / 2 - 0.1, -h / 2 + 0.5);
+      const b = iso(-w / 2 + 0.5, h / 2 - 0.1);
+      g.fillRect(a.x - 10, a.y - 11, 12, 3);
+      g.fillRect(b.x - 2, b.y - 11, 12, 3);
+      // Sandbags on the roof.
+      g.fillStyle(0xb79f6a, 1);
+      const c = iso(0, 0);
+      g.fillEllipse(c.x - 8, c.y - 18, 10, 5);
+      g.fillEllipse(c.x + 6, c.y - 18, 10, 5);
+      break;
+    }
+    case 'wall': {
+      const t1 = drawPrism(g, 1, 1, 12, shade(CONCRETE, 0.95), 3);
+      g.lineStyle(1, shade(CONCRETE, 0.7), 1);
+      g.lineBetween(t1[3].x, t1[3].y, t1[1].x, t1[1].y);
+      break;
+    }
+    case 'radar-station': {
+      const t1 = drawPrism(g, w - 0.5, h - 0.5, 14, body, 3);
+      stripe(g, t1, team);
+      // Mast + rotating dish (animated through `phase`).
+      const c = iso(0, 0);
+      g.lineStyle(3, 0x2b2f33, 1);
+      g.lineBetween(c.x, c.y - 17, c.x, c.y - 40);
+      const a = phase * Math.PI * 2;
+      const dx = Math.cos(a) * 14;
+      g.fillStyle(0xcfd4d8);
+      g.fillEllipse(c.x + dx * 0.15, c.y - 44, Math.max(6, Math.abs(dx) * 2), 12);
+      g.lineStyle(2, team, 1);
+      g.strokeEllipse(c.x + dx * 0.15, c.y - 44, Math.max(6, Math.abs(dx) * 2), 12);
       break;
     }
   }
@@ -217,6 +255,18 @@ export function drawTurretHead(
     const b = iso(Math.cos(angle) * len, Math.sin(angle) * len);
     g.lineStyle(3, 0x2a2e33, 1);
     g.lineBetween(a.x, a.y - 17, b.x, b.y - 17);
+  } else if (type === 'bunker') {
+    // Mounted machine gun on the roof.
+    const a = iso(Math.cos(angle) * 0.05, Math.sin(angle) * 0.05);
+    const b = iso(Math.cos(angle) * 0.5, Math.sin(angle) * 0.5);
+    g.lineStyle(2.5, 0x25292d, 1);
+    g.lineBetween(a.x, a.y - 20, b.x, b.y - 20);
+  } else if (type === 'missile-launcher') {
+    const top = drawBox(g, 0, 0, 0.56, 0.5, angle, 9, 13, mix(STEEL, color, 0.3));
+    g.fillStyle(0x3a3f45);
+    for (const pt of top) g.fillCircle(pt.x, pt.y - 1, 2);
+    g.fillStyle(0xe98a2b);
+    g.fillCircle((top[0].x + top[1].x) / 2, (top[0].y + top[1].y) / 2 - 2, 1.6);
   } else if (type === 'sam-site') {
     const top = drawBox(g, 0, 0, 0.5, 0.42, angle, 8, 13, mix(STEEL, color, 0.3));
     g.fillStyle(0xe8e8e8);
@@ -246,7 +296,10 @@ export function drawUnitBody(
   };
   switch (type) {
     case 'rifleman':
-    case 'at-soldier': {
+    case 'at-soldier':
+    case 'sniper':
+    case 'medic':
+    case 'engineer': {
       shadow(6);
       g.fillStyle(0x2d3127);
       g.fillRect(-3, -6, 2.2, 6);
@@ -255,12 +308,24 @@ export function drawUnitBody(
       g.fillRoundedRect(-4, -15, 8, 10, 2);
       g.fillStyle(0xd8b48a);
       g.fillCircle(0, -17.5, 2.6);
-      g.fillStyle(shade(OLIVE, 0.8));
+      // Helmet: medics white, engineers yellow, everyone else olive.
+      g.fillStyle(type === 'medic' ? 0xeeeeee : type === 'engineer' ? 0xe8b830 : shade(OLIVE, 0.8));
       g.fillEllipse(0, -19, 6.5, 3.5);
+      if (type === 'medic') {
+        g.fillStyle(0xd23c3c);
+        g.fillRect(-1.5, -13, 3, 6);
+        g.fillRect(-3, -11.5, 6, 3);
+      }
+      if (type === 'engineer') {
+        g.fillStyle(0x4a4f3a);
+        g.fillRoundedRect(-5, -14, 3, 7, 1);
+      }
       const d = iso(Math.cos(f), Math.sin(f));
       const n = Math.hypot(d.x, d.y) || 1;
-      g.lineStyle(type === 'at-soldier' ? 3.5 : 2, 0x1e2124, 1);
-      g.lineBetween(0, -11, (d.x / n) * 9, -11 + (d.y / n) * 9);
+      if (type === 'medic' || type === 'engineer') break; // unarmed
+      const len = type === 'sniper' ? 14 : 9;
+      g.lineStyle(type === 'at-soldier' ? 3.5 : type === 'sniper' ? 1.5 : 2, 0x1e2124, 1);
+      g.lineBetween(0, -11, (d.x / n) * len, -11 + (d.y / n) * len);
       if (type === 'at-soldier') {
         g.fillStyle(0x56603a);
         g.fillCircle((d.x / n) * 9, -11 + (d.y / n) * 9, 2);
@@ -326,8 +391,10 @@ export function drawUnitBody(
 }
 
 /** True when the unit has a separately rotating top part (turret or rotor). */
+const NO_TOP: UnitTypeId[] = ['rifleman', 'at-soldier', 'sniper', 'medic', 'engineer', 'recon-drone'];
+
 export function hasTop(type: UnitTypeId): boolean {
-  return type !== 'rifleman' && type !== 'at-soldier' && type !== 'recon-drone';
+  return !NO_TOP.includes(type);
 }
 
 /**

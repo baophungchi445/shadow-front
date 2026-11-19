@@ -72,6 +72,29 @@ MVP implements RUSH, FORTRESS, EAGLE, WARLORD (SHADOW falls back to balanced wei
   The wave attacker itself is not an AI Commander (see GAMEPLAY_SYSTEMS §5e).
 - **Tutorial:** the enemy outpost has no AI Commander at all.
 
+## 6d. v0.5
+
+- The AI obeys the population cap like a player (it does not queue units that would exceed it).
+- AI decision randomness is seeded from the match seed (`World.seed`); before v0.5 it depended on the player slot only, so every match
+  against the AI played out identically when the player acted the same way.
+- Known weakness found by simulation: Easy/Normal AIs do not pick counters (`counters: false`), so they handle massed helicopters poorly.
+  The Iron Fist mission therefore teaches the player to build SAM Sites.
+
+## 6e. v0.6
+
+- Production only offers units available to the AI's faction; every personality favours its faction unit.
+- Support units: at most 2 medics and 2 engineers, only with ≥ 6 combat units, picked occasionally (15%) so they never crowd out combat units.
+- Defensive personalities (defenses ≥ 2) add a Missile Launcher after the Research Center; Hard/Insane build a Radar Station. Walls are never built
+  by the AI (they could block its own paths).
+- Domination uses the existing capture logic (Normal+ AIs contest every point).
+
+## 6f. v0.7
+
+- Researches its faction technology after the personality order; defensive personalities upgrade defenses / power plants when rich (cost + 800).
+- Capture the Flag: a 4-unit raid squad (fastest ground units) goes for the enemy flag (public position), carriers run home without fighting,
+  home units chase whoever took our flag.
+- Not yet: the AI does not use transports or bunkers and never builds Transport Helicopters.
+
 ## 7. Acceptance criteria
 
 - AI builds Power Plant, Extractor, Barracks, War Factory by itself.

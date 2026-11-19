@@ -12,12 +12,13 @@ import {
 } from './index';
 
 describe('game-data', () => {
-  it('has five factions, 6+ buildings and 8-12 unit types (MVP content)', () => {
+  it('has five factions, 6+ buildings, at least the 8-unit MVP shared roster plus one unit per faction', () => {
     expect(Object.keys(FACTIONS)).toHaveLength(5);
     expect(Object.keys(BUILDINGS).length).toBeGreaterThanOrEqual(6);
-    const n = Object.keys(UNITS).length;
-    expect(n).toBeGreaterThanOrEqual(8);
-    expect(n).toBeLessThanOrEqual(12);
+    const all = Object.values(UNITS);
+    const shared = all.filter((u) => !u.faction).length;
+    expect(shared).toBeGreaterThanOrEqual(8);
+    expect(all.length - shared).toBe(5);
   });
 
   it('every unit producer is a producing building', () => {

@@ -45,6 +45,21 @@ export function TopBar({
         </div>
         <div
           className="flex items-center gap-1.5"
+          title="Population used / limit (queued units included)"
+          data-testid="supply"
+        >
+          <span className="text-gray-400">👥</span>
+          <span
+            className={`font-display text-sm tabular-nums ${
+              hud.supply.cap && hud.supply.used >= hud.supply.cap ? 'text-alert-500' : 'text-gray-300'
+            }`}
+          >
+            {hud.supply.used}
+            {hud.supply.cap ? `/${hud.supply.cap}` : ''}
+          </span>
+        </div>
+        <div
+          className="flex items-center gap-1.5"
           title="Strategic points held by your team (+6 credits/s each)"
         >
           <span className="text-sky-400">⚑</span>
@@ -58,7 +73,21 @@ export function TopBar({
         <div className="font-display text-xl font-semibold tabular-nums text-gray-100">
           {fmtTime(hud.time)}
         </div>
-        {hud.survival ? (
+        {hud.ctf ? (
+          <div className="text-[11px] uppercase tracking-widest text-gray-400" data-testid="ctf">
+            Capture the flag · <span className="font-semibold text-mil-400">You {hud.ctf.mine}</span> ·{' '}
+            <span className="font-semibold text-alert-500">Enemy {hud.ctf.enemy}</span> / {hud.ctf.target} ·{' '}
+            <span className={hud.ctf.ownFlag === 'home' ? 'text-gray-300' : 'font-semibold text-alert-500'}>
+              our flag {hud.ctf.ownFlag}
+            </span>
+          </div>
+        ) : hud.domination ? (
+          <div className="text-[11px] uppercase tracking-widest text-gray-400" data-testid="domination">
+            Domination · <span className="font-semibold text-mil-400">You {hud.domination.mine}</span> ·{' '}
+            <span className="font-semibold text-alert-500">Enemy {hud.domination.enemy}</span> /{' '}
+            {hud.domination.target}
+          </div>
+        ) : hud.survival ? (
           <div className="text-[11px] uppercase tracking-widest text-gray-400" data-testid="wave-status">
             <span className="font-semibold text-warn-400">
               Wave {hud.survival.wave}/{hud.survival.total}

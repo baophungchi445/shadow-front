@@ -1,3 +1,4 @@
+import { BALANCE } from '@shadow-front/game-data';
 import { findPath } from '../pathfinding';
 import type { Entity, Unit } from '../types';
 import type { World } from '../world';
@@ -110,8 +111,22 @@ export function orderHold(units: Unit[]): void {
   }
 }
 
-function onArrive(u: Unit): void {
+/** Patrol: attack-move between each unit's current position and its share of (x, y). */
+export function orderPatrol(world: World, units: Unit[], x: number, y: number): void {
+  const starts = new Map(units.map((u) => [u.id, { x: u.x, y: u.y }]));
+  orderMove(world, units, x, y, true);
+  for (const u of units) if (u.order.type === 'move') u.order.patrol = starts.get(u.id);
+}
+
+function onArrive(world: World, u: Unit): void {
   clearPath(u);
+  const o = u.order;
+  if (o.type === 'move' && o.patrol) {
+    // Turn around and walk back to the other end.
+    u.order = { type: 'move', x: o.patrol.x, y: o.patrol.y, attackMove: true, patrol: { x: o.x, y: o.y } };
+    pathTo(world, u, o.patrol.x, o.patrol.y);
+    return;
+  }
   if (u.order.type === 'move' || u.order.type === 'retreat') {
     u.order = { type: 'idle' };
     u.anchorX = u.x;
@@ -130,6 +145,7 @@ export function turnToward(from: number, to: number, maxStep: number): number {
 
 export function updateMovement(world: World): void {
   const units = world.units();
+  const carriers = new Set(world.flags.map((f) => f.carrier).filter((id) => id !== null));
   for (const u of units) {
     u.prevX = u.x;
     u.prevY = u.y;
@@ -157,15 +173,16 @@ export function updateMovement(world: World): void {
     const turnRate = u.def.category === 'infantry' || u.air ? 0.5 : 0.18;
     if (d > 1e-6) u.facing = turnToward(u.facing, Math.atan2(dy, dx), turnRate);
 
-    if (d <= u.speed) {
+    const speed = carriers.has(u.id) ? u.speed * BALANCE.flagCarrierSpeed : u.speed;
+    if (d <= speed) {
       u.x = wp.x;
       u.y = wp.y;
       u.pathIndex++;
-      if (u.pathIndex >= u.path.length) onArrive(u);
+      if (u.pathIndex >= u.path.length) onArrive(world, u);
       continue;
     }
-    const nx = u.x + (dx / d) * u.speed;
-    const ny = u.y + (dy / d) * u.speed;
+    const nx = u.x + (dx / d) * speed;
+    const ny = u.y + (dy / d) * speed;
     if (!u.air && !world.grid.walkable(Math.floor(nx), Math.floor(ny)) && u.pathGoal) {
       pathTo(world, u, u.pathGoal.x, u.pathGoal.y);
       continue;
@@ -180,7 +197,7 @@ export function updateMovement(world: World): void {
       u.lastDist = gd;
       u.stuckTicks = 0;
     } else if (++u.stuckTicks > 30) {
-      if (gd < 2) onArrive(u);
+      if (gd < 2) onArrive(world, u);
       else if (u.pathGoal) pathTo(world, u, u.pathGoal.x, u.pathGoal.y);
     }
   }

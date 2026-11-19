@@ -133,3 +133,54 @@ describe('repair', () => {
     expect(hq.repairing).toBe(false);
   });
 });
+
+describe('population cap', () => {
+  it('blocks production over the cap (queued units count) and frees room when units die', () => {
+    const w = new World({ ...config(), unitCap: 10 });
+    const hq = w.playerBuildings(0)[0];
+    const rax = w.createBuilding(0, 'barracks', hq.tx, hq.ty + 4, true);
+    // Starting army: 3 riflemen + AT soldier (1 each) + recon vehicle (2) = 6.
+    expect(w.supplyUsed(0)).toBe(6);
+    for (let i = 0; i < 4; i++)
+      expect(w.issue({ type: 'produce', player: 0, producer: rax.id, unit: 'rifleman' }).ok).toBe(true);
+    expect(w.supplyUsed(0)).toBe(10);
+    const r = w.issue({ type: 'produce', player: 0, producer: rax.id, unit: 'rifleman' });
+    expect(r).toEqual({ ok: false, reason: 'Unit limit reached (10)' });
+    w.destroy(w.playerUnits(0)[0]);
+    expect(w.issue({ type: 'produce', player: 0, producer: rax.id, unit: 'rifleman' }).ok).toBe(true);
+  });
+
+  it('is unlimited when not configured', () => {
+    const w = new World(config());
+    expect(w.unitCap).toBe(0);
+    expect(w.overCap(0, 'heavy-tank')).toBe(false);
+  });
+});
+
+describe('domination', () => {
+  it('points score every second and the first team to the target wins', () => {
+    const w = new World({ ...config(), mission: 'domination' });
+    w.points[0].team = 0;
+    w.points[0].player = 0;
+    w.points[1].team = 0;
+    w.points[1].player = 0;
+    run(w, 20 * 10);
+    expect(w.scores.get(0)).toBeGreaterThanOrEqual(19);
+    expect(w.winningTeam).toBeNull();
+    // Hold the points (keep re-asserting ownership against decay) until the target is reached.
+    for (let i = 0; i < 20 * 1000 && w.winningTeam === null; i++) {
+      w.points[0].team = 0;
+      w.points[1].team = 0;
+      w.step();
+    }
+    expect(w.winningTeam).toBe(0);
+    expect(w.scores.get(0)).toBeGreaterThanOrEqual(BALANCE.dominationTarget);
+  });
+
+  it('random map matches use mapSeed', () => {
+    const a = new World({ ...config(), mapId: 'random', mapSeed: 5 });
+    const b = new World({ ...config(), mapId: 'random', mapSeed: 6 });
+    expect(a.map.tiles).not.toEqual(b.map.tiles);
+    expect(a.map.id).toBe('random');
+  });
+});

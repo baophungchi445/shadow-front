@@ -14,7 +14,19 @@ export type Command =
   | { type: 'rally'; player: PlayerId; producer: EntityId; x: number; y: number }
   | { type: 'research'; player: PlayerId; building: EntityId; research: ResearchId }
   | { type: 'cancelResearch'; player: PlayerId; building: EntityId }
-  | { type: 'repair'; player: PlayerId; building: EntityId; on: boolean };
+  | { type: 'repair'; player: PlayerId; building: EntityId; on: boolean }
+  /** Attack-move back and forth between each unit's current position and (x, y). */
+  | { type: 'patrol'; player: PlayerId; units: EntityId[]; x: number; y: number }
+  /** Infantry board a friendly transport or garrison a bunker. */
+  | { type: 'load'; player: PlayerId; units: EntityId[]; carrier: EntityId }
+  /** Everyone inside the carrier gets out next to it. */
+  | { type: 'unload'; player: PlayerId; carrier: EntityId }
+  /** Send credits to a teammate. */
+  | { type: 'transfer'; player: PlayerId; to: PlayerId; amount: number }
+  /** Start the level-2 upgrade of a building. */
+  | { type: 'upgrade'; player: PlayerId; building: EntityId }
+  /** Sell a completed building (not the HQ) for part of its price. */
+  | { type: 'sell'; player: PlayerId; building: EntityId };
 
 export type CommandResult = { ok: true } | { ok: false; reason: string };
 
@@ -30,6 +42,18 @@ export type GameEvent =
   | { type: 'pointCaptured'; point: number; team: TeamId; previousTeam: TeamId | null }
   | { type: 'pointNeutralized'; point: number; previousTeam: TeamId }
   | { type: 'researchComplete'; player: PlayerId; research: ResearchId }
+  /** A unit gained a veterancy rank (1 Veteran, 2 Elite, 3 Heroic). */
+  | { type: 'promoted'; id: EntityId; player: PlayerId; rank: number }
+  | { type: 'sold'; id: EntityId; player: PlayerId; refund: number; x: number; y: number }
+  | { type: 'boarded'; id: EntityId; carrier: EntityId; player: PlayerId }
+  | { type: 'upgraded'; id: EntityId; player: PlayerId }
+  | { type: 'creditsSent'; from: PlayerId; to: PlayerId; amount: number }
+  /** Capture the Flag (`team` = owner of the flag). */
+  | { type: 'flagTaken'; team: TeamId; by: TeamId; x: number; y: number }
+  | { type: 'flagDropped'; team: TeamId; x: number; y: number }
+  | { type: 'flagReturned'; team: TeamId }
+  | { type: 'flagCaptured'; team: TeamId; flagTeam: TeamId }
+  | { type: 'unloaded'; carrier: EntityId; player: PlayerId; count: number }
   /** Survival: a wave will arrive at (x, y) in `inTicks` ticks. */
   | { type: 'waveIncoming'; wave: number; x: number; y: number; inTicks: number }
   /** Survival: a wave has entered the map. */

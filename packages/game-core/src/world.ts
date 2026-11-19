@@ -20,6 +20,7 @@ import {
   PLAYER_COLORS,
   RESEARCH_EFFECTS,
   SURVIVAL,
+  UNIT_SUPPLY,
   UNITS,
   getMap,
   mulberry32,
@@ -27,14 +28,17 @@ import {
 import { NavGrid } from './grid';
 import { FogOfWar } from './fog';
 import { SpatialHash } from './spatial';
-import type { Building, ControlPoint, Entity, Player, Projectile, SurvivalState, Unit } from './types';
+import type { Building, ControlPoint, Entity, Flag, Player, Projectile, SurvivalState, Unit } from './types';
 import { executeCommand } from './commands';
 import { updateEconomy, updatePower, updateConstruction, updateProduction } from './systems/economy';
 import { updateMovement } from './systems/movement';
 import { updateCombat, updateProjectiles } from './systems/combat';
 import { updateControlPoints } from './systems/points';
-import { updateRepair, updateResearch } from './systems/research';
+import { updateRepair, updateResearch, updateUpgrades } from './systems/research';
 import { updateWaves } from './systems/waves';
+import { updateSupport } from './systems/support';
+import { updateBoarding } from './systems/transport';
+import { updateFlags } from './systems/flags';
 
 export class World {
   readonly map: MapDef;
@@ -48,18 +52,29 @@ export class World {
   /** Remaining credits in each ore tile (0 for non-ore tiles). */
   readonly oreRemaining: Float32Array;
   readonly rng: () => number;
+  /** Match seed (also seeds AI decision randomness). */
+  readonly seed: number;
   tick = 0;
   winningTeam: TeamId | null = null;
   private nextId = 1;
   private pendingEvents: GameEvent[] = [];
   /** Capturable strategic points from the map. */
   readonly points: ControlPoint[];
+  /** Capture the Flag: flags and captures per team (ctf mission only). */
+  readonly flags: Flag[] = [];
+  readonly captures = new Map<TeamId, number>();
+  /** Domination score per team (domination mission only). */
+  readonly scores = new Map<TeamId, number>();
+  /** Population cap per player (0 = unlimited). */
+  readonly unitCap: number;
   /** Survival mode state (null in other missions). */
   readonly survival: SurvivalState | null = null;
 
   constructor(config: MatchConfig) {
-    this.map = getMap(config.mapId);
+    this.map = getMap(config.mapId, config.mapId === 'random' ? (config.mapSeed ?? config.seed) : undefined);
     this.mission = config.mission;
+    this.unitCap = Math.max(0, Math.floor(config.unitCap ?? 0));
+    this.seed = config.seed;
     this.rng = mulberry32(config.seed);
     this.grid = new NavGrid(this.map);
     this.spatial = new SpatialHash(4, Math.ceil(this.map.width / 4));
@@ -83,7 +98,7 @@ export class World {
     }
     const usedColors = new Set<number>();
     config.slots.forEach((slot, i) => {
-      let color = FACTIONS[slot.faction].color;
+      let color = slot.color ?? FACTIONS[slot.faction].color;
       if (usedColors.has(color)) color = PLAYER_COLORS.find((c) => !usedColors.has(c)) ?? color;
       usedColors.add(color);
       this.players.push({
@@ -132,6 +147,7 @@ export class World {
     }));
 
     for (const p of this.players) if (!p.raider) this.setupStartingBase(p);
+    if (config.mission === 'ctf') this.placeFlags();
     updatePower(this);
     this.updateFog();
   }
@@ -157,6 +173,26 @@ export class World {
       const t = spots[i] ?? { x: Math.floor(hq.x), y: Math.floor(hq.y + 3) };
       this.createUnit(p.id, type, t.x + 0.5, t.y + 0.5);
     });
+  }
+
+  /** One flag per team, a few tiles in front of the team's first HQ (toward the map centre). */
+  private placeFlags(): void {
+    const done = new Set<TeamId>();
+    for (const p of this.players) {
+      if (done.has(p.team)) continue;
+      const hq = this.playerBuildings(p.id).find((b) => b.type === 'headquarters');
+      if (!hq) continue;
+      done.add(p.team);
+      const dx = Math.sign(this.map.width / 2 - hq.x);
+      const dy = Math.sign(this.map.height / 2 - hq.y);
+      const t = this.grid.nearestWalkable(Math.floor(hq.x + dx * 3.5), Math.floor(hq.y + dy * 3.5)) ?? {
+        x: Math.floor(hq.x),
+        y: Math.floor(hq.y + 3),
+      };
+      const x = t.x + 0.5;
+      const y = t.y + 0.5;
+      this.flags.push({ team: p.team, homeX: x, homeY: y, x, y, carrier: null, atHome: true });
+    }
   }
 
   /** Adds the Survival wave attacker (no base; entry points are the unused spawns). */
@@ -222,7 +258,12 @@ export class World {
     const vehicle = def.category === 'armored' || def.category === 'artillery';
     const armor = vehicle && this.hasResearch(owner, 'composite-armor') ? RESEARCH_EFFECTS.vehicleHp : 1;
     const optics = this.hasResearch(owner, 'advanced-optics') ? RESEARCH_EFFECTS.vision : 1;
-    const hp = Math.round(def.hp * mods.unitHp * armor);
+    const medkits =
+      def.category === 'infantry' && this.hasResearch(owner, 'combat-medkits')
+        ? RESEARCH_EFFECTS.infantryHp
+        : 1;
+    const turbo = vehicle && this.hasResearch(owner, 'turbo-engines') ? RESEARCH_EFFECTS.vehicleSpeed : 1;
+    const hp = Math.round(def.hp * mods.unitHp * armor * medkits);
     const u: Unit = {
       id: this.allocId(),
       kind: 'unit',
@@ -245,7 +286,7 @@ export class World {
       vision: def.vision * mods.vision * optics,
       lastFiredTick: -100,
       air: def.category === 'air',
-      speed: def.speed * mods.speed * (vehicle ? mods.vehicleSpeed : 1),
+      speed: def.speed * mods.speed * (vehicle ? mods.vehicleSpeed : 1) * turbo,
       radius: def.radius,
       order: { type: 'idle' },
       path: [],
@@ -258,6 +299,9 @@ export class World {
       moving: false,
       stuckTicks: 0,
       lastDist: Infinity,
+      xp: 0,
+      rank: 0,
+      passengers: [],
     };
     this.entities.set(u.id, u);
     return u;
@@ -267,7 +311,8 @@ export class World {
     const def = BUILDINGS[type];
     const p = this.players[owner];
     const mods = FACTIONS[p.faction].modifiers;
-    const maxHp = Math.round(def.hp * mods.buildingHp);
+    const fort = this.hasResearch(owner, 'fortified-structures') ? RESEARCH_EFFECTS.buildingHp : 1;
+    const maxHp = Math.round(def.hp * mods.buildingHp * fort);
     const b: Building = {
       id: this.allocId(),
       kind: 'building',
@@ -299,6 +344,9 @@ export class World {
       oreTiles: [],
       research: null,
       repairing: false,
+      passengers: [],
+      level: 1,
+      upgrading: null,
     };
     if (def.needsOre) b.oreTiles = this.oreTilesNear(b.x, b.y);
     this.entities.set(b.id, b);
@@ -338,6 +386,25 @@ export class World {
     return out;
   }
 
+  // ---------------------------------------------------------------- population
+
+  /** Supply used by a player's living units plus units queued in its producers. */
+  supplyUsed(pid: PlayerId): number {
+    let used = 0;
+    for (const e of this.entities.values()) {
+      if (e.dead || e.owner !== pid) continue;
+      if (e.kind === 'unit') used += UNIT_SUPPLY[e.type];
+      else for (const q of e.queue) used += UNIT_SUPPLY[q];
+      for (const p of e.passengers) used += UNIT_SUPPLY[p.type];
+    }
+    return used;
+  }
+
+  /** True when queuing `type` would exceed the population cap. */
+  overCap(pid: PlayerId, type: UnitTypeId): boolean {
+    return this.unitCap > 0 && this.supplyUsed(pid) + UNIT_SUPPLY[type] > this.unitCap;
+  }
+
   // ---------------------------------------------------------------- research
 
   hasResearch(pid: PlayerId, id: ResearchId): boolean {
@@ -360,8 +427,18 @@ export class World {
         u.hp *= RESEARCH_EFFECTS.vehicleHp;
       } else if (id === 'advanced-optics') {
         u.vision *= RESEARCH_EFFECTS.vision;
+      } else if (id === 'combat-medkits' && u.def.category === 'infantry') {
+        u.maxHp = Math.round(u.maxHp * RESEARCH_EFFECTS.infantryHp);
+        u.hp *= RESEARCH_EFFECTS.infantryHp;
+      } else if (id === 'turbo-engines' && (u.def.category === 'armored' || u.def.category === 'artillery')) {
+        u.speed *= RESEARCH_EFFECTS.vehicleSpeed;
       }
     }
+    if (id === 'fortified-structures')
+      for (const b of this.playerBuildings(pid)) {
+        b.maxHp = Math.round(b.maxHp * RESEARCH_EFFECTS.buildingHp);
+        b.hp *= RESEARCH_EFFECTS.buildingHp;
+      }
     this.emit({ type: 'researchComplete', player: pid, research: id });
   }
 
@@ -494,8 +571,40 @@ export class World {
 
   // ---------------------------------------------------------------- damage
 
-  damage(target: Entity, amount: number, attacker: PlayerId): void {
+  /** Grants veterancy XP to a unit for destroying `victim`. */
+  private grantXp(u: Unit, victim: Entity): void {
+    if (u.dead || u.rank >= 3) return;
+    u.xp += victim.kind === 'unit' ? victim.def.cost : victim.def.cost * 0.5;
+    const thresholds = BALANCE.veterancyThresholds;
+    while (u.rank < 3 && u.xp >= thresholds[u.rank] * u.def.cost) {
+      u.rank++;
+      const gain = Math.round((u.maxHp / (1 + (u.rank - 1) * BALANCE.veterancyHp)) * BALANCE.veterancyHp);
+      u.maxHp += gain;
+      u.hp += gain;
+      this.emit({ type: 'promoted', id: u.id, player: u.owner, rank: u.rank });
+    }
+  }
+
+  /** Damage multiplier from a shooter's veterancy rank. */
+  rankBonus(e: Entity): number {
+    return e.kind === 'unit' ? 1 + e.rank * BALANCE.veterancyDamage : 1;
+  }
+
+  /** Removes a building without counting it as lost (sell / cancelled construction). */
+  removeBuilding(b: Building): void {
+    b.dead = true;
+    b.hp = 0;
+    this.grid.setOccupied(b.tx, b.ty, b.w, b.h, 0);
+  }
+
+  damage(target: Entity, amount: number, attacker: PlayerId, sourceId: EntityId | null = null): void {
     if (target.dead || amount <= 0) return;
+    if (
+      target.kind === 'unit' &&
+      target.def.armor === 'heavy' &&
+      this.hasResearch(target.owner, 'reactive-armor')
+    )
+      amount *= RESEARCH_EFFECTS.reactiveArmor;
     target.hp -= amount;
     const owner = this.players[target.owner];
     if (owner.lastUnderAttackTick + 100 < this.tick) {
@@ -511,11 +620,58 @@ export class World {
     if (target.hp <= 0) {
       this.players[attacker].stats.kills++;
       this.destroy(target);
+      const src = this.get(sourceId);
+      if (src && src.kind === 'unit') this.grantXp(src, target);
     }
+  }
+
+  /** Capacity of a transport or bunker (0 when it carries nobody). */
+  capacityOf(e: Entity): number {
+    if (e.kind === 'unit') return e.def.transport?.capacity ?? 0;
+    return e.complete ? (e.def.garrison?.capacity ?? 0) : 0;
+  }
+
+  /** Puts a unit inside a carrier: it leaves the world until unloaded. */
+  board(u: Unit, carrier: Entity): boolean {
+    if (carrier.passengers.length >= this.capacityOf(carrier)) return false;
+    u.order = { type: 'idle' };
+    u.targetId = null;
+    u.path = [];
+    u.moving = false;
+    carrier.passengers.push(u);
+    this.entities.delete(u.id);
+    this.emit({ type: 'boarded', id: u.id, carrier: carrier.id, player: u.owner });
+    return true;
+  }
+
+  /** Everyone inside gets out on free tiles next to the carrier. */
+  unloadAll(carrier: Entity): number {
+    const out = carrier.passengers.splice(0);
+    if (!out.length) return 0;
+    const spots = this.grid.spreadTiles(Math.floor(carrier.x), Math.floor(carrier.y), out.length);
+    out.forEach((u, i) => {
+      const t = spots[i] ?? spots[0] ?? { x: Math.floor(carrier.x), y: Math.floor(carrier.y) };
+      u.x = u.prevX = u.anchorX = t.x + 0.5;
+      u.y = u.prevY = u.anchorY = t.y + 0.5;
+      u.order = { type: 'idle' };
+      u.path = [];
+      u.moving = false;
+      this.entities.set(u.id, u);
+    });
+    this.emit({ type: 'unloaded', carrier: carrier.id, player: carrier.owner, count: out.length });
+    return out.length;
   }
 
   destroy(e: Entity): void {
     if (e.dead) return;
+    // Bunker occupants escape; passengers of a destroyed vehicle die with it.
+    if (e.kind === 'building') this.unloadAll(e);
+    else
+      for (const p of e.passengers.splice(0)) {
+        p.dead = true;
+        p.hp = 0;
+        this.players[p.owner].stats.unitsLost++;
+      }
     e.dead = true;
     e.hp = 0;
     const owner = this.players[e.owner];
@@ -554,11 +710,22 @@ export class World {
     updateProjectiles(this);
     updateResearch(this);
     updateRepair(this);
+    updateUpgrades(this);
+    updateSupport(this);
+    updateBoarding(this);
+    updateFlags(this);
     if (this.tick % 10 === 0) updateControlPoints(this);
     updateWaves(this);
 
     if (this.tick % BALANCE.fogInterval === 0) this.updateFog();
     if (this.tick % 20 === 0) {
+      for (const u of this.units()) {
+        if (u.hp >= u.maxHp) continue;
+        let regen = u.rank >= 3 ? BALANCE.heroicRegen : 0;
+        if (u.def.category !== 'infantry' && this.hasResearch(u.owner, 'nano-repair'))
+          regen += RESEARCH_EFFECTS.nanoRepair;
+        if (regen > 0) u.hp = Math.min(u.maxHp, u.hp + u.maxHp * regen);
+      }
       this.checkVictory();
       this.cleanup();
     }
@@ -600,6 +767,25 @@ export class World {
         p.defeated = true;
         for (const e of [...blds, ...units]) this.destroy(e);
         this.emit({ type: 'playerDefeated', player: p.id });
+      }
+    }
+    if (this.mission === 'ctf') {
+      const winner = [...this.captures].find(([, v]) => v >= BALANCE.ctfCaptures);
+      if (winner) {
+        this.winningTeam = winner[0];
+        this.emit({ type: 'gameOver', winningTeam: winner[0] });
+        return;
+      }
+    }
+    if (this.mission === 'domination') {
+      for (const pt of this.points)
+        if (pt.team !== null)
+          this.scores.set(pt.team, (this.scores.get(pt.team) ?? 0) + BALANCE.dominationRate);
+      const leader = [...this.scores].find(([, v]) => v >= BALANCE.dominationTarget);
+      if (leader) {
+        this.winningTeam = leader[0];
+        this.emit({ type: 'gameOver', winningTeam: leader[0] });
+        return;
       }
     }
     const aliveTeams = new Set(this.players.filter((p) => !p.defeated).map((p) => p.team));

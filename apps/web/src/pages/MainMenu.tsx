@@ -1,4 +1,4 @@
-import { tutorialConfig } from '@shadow-front/game-core';
+import { levelInfo, titleName } from '@shadow-front/game-core';
 import { useApp } from '../stores/appStore';
 
 function Backdrop() {
@@ -32,15 +32,13 @@ function Backdrop() {
 
 export function MainMenu() {
   const go = useApp((s) => s.go);
-  const startMatch = useApp((s) => s.startMatch);
+  const profile = useApp((s) => s.profile);
+  const lvl = levelInfo(profile.xp);
   const items: { label: string; sub: string; action: () => void; primary?: boolean }[] = [
     { label: 'Play', sub: 'Skirmish or Survival vs AI', action: () => go('skirmish'), primary: true },
-    {
-      label: 'Tutorial',
-      sub: 'Learn the basics step by step',
-      action: () => startMatch(tutorialConfig('Commander', Math.floor(Math.random() * 1e9))),
-    },
+    { label: 'Campaign', sub: 'Tutorial and story missions', action: () => go('campaign') },
     // Multiplayer is hidden while development focuses on local play vs AI (see docs/DEVELOPMENT_ROADMAP.md).
+    { label: 'Profile', sub: 'Level, statistics, achievements', action: () => go('profile') },
     { label: 'Army', sub: 'Units, buildings & factions', action: () => go('army') },
     { label: 'Settings', sub: 'Camera & controls', action: () => go('settings') },
   ];
@@ -78,8 +76,24 @@ export function MainMenu() {
             </button>
           ))}
         </div>
+        <button
+          className="absolute right-[4%] top-6 rounded border border-graphite-600 bg-graphite-900/80 px-3 py-2 text-left hover:border-mil-500"
+          onClick={() => go('profile')}
+          data-testid="profile-badge"
+        >
+          <div className="font-display text-sm font-bold tracking-wider text-gray-100">
+            {profile.nickname}{' '}
+            <span className="text-xs font-normal text-warn-400">· {titleName(profile)}</span>
+          </div>
+          <div className="text-[11px] text-gray-400">
+            Level {lvl.level} · {Object.keys(profile.achievements).length} achievements
+          </div>
+          <div className="mt-1 h-1 w-40 overflow-hidden rounded bg-graphite-700">
+            <div className="h-full bg-mil-500" style={{ width: `${(lvl.into / lvl.needed) * 100}%` }} />
+          </div>
+        </button>
         <div className="absolute bottom-5 left-[8%] text-[11px] text-gray-600">
-          v0.4 prototype · procedural placeholder graphics & audio · offline skirmish, survival & tutorial vs
+          v0.7 prototype · procedural placeholder graphics & audio · offline skirmish, survival & campaign vs
           AI
         </div>
       </div>

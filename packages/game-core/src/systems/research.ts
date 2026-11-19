@@ -33,3 +33,24 @@ export function updateRepair(world: World): void {
     b.hp = Math.min(b.maxHp, b.hp + b.maxHp / BALANCE.repairTicks);
   }
 }
+
+/** Advances building upgrades; on completion the building becomes level 2 (more HP / damage / power). */
+export function updateUpgrades(world: World): void {
+  for (const b of world.buildings()) {
+    if (b.upgrading === null) continue;
+    const up = b.def.upgrade;
+    if (!up) {
+      b.upgrading = null;
+      continue;
+    }
+    b.upgrading += world.powerFactor(b.owner);
+    if (b.upgrading >= up.time) {
+      b.upgrading = null;
+      b.level = 2;
+      b.maxHp = Math.round(b.maxHp * up.hp);
+      b.hp *= up.hp;
+      if (up.damage) b.damageMul *= up.damage;
+      world.emit({ type: 'upgraded', id: b.id, player: b.owner });
+    }
+  }
+}

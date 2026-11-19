@@ -2,11 +2,16 @@ import type { MapDef, MapId, MapSpawn, TileKind } from '@shadow-front/shared-typ
 import { mulberry32 } from './rng';
 import { parseTiledMap, type TiledMap } from './tiled';
 import riverCrossingJson from './maps/river-crossing.json';
+import highlandPassJson from './maps/highland-pass.json';
+import snowfieldJson from './maps/snowfield.json';
+import forestWarfareJson from './maps/forest-warfare.json';
+import islandConflictJson from './maps/island-conflict.json';
+import industrialZoneJson from './maps/industrial-zone.json';
 
 /**
  * Maps come from two sources that produce the same `MapDef`:
  * - deterministic layout scripts (Desert Storm, Urban Conflict, below);
- * - Tiled JSON files in `./maps/` imported with `parseTiledMap` (River Crossing).
+ * - Tiled JSON files in `./maps/` imported with `parseTiledMap` (River Crossing, Highland Pass).
  */
 class MapBuilder {
   readonly tiles: TileKind[];
@@ -200,14 +205,141 @@ function buildUrbanConflict(): MapDef {
   };
 }
 
+// ------------------------------------------------------------------ random maps
+
+const THEMES: { base: TileKind; patch: TileKind; block: TileKind; name: string }[] = [
+  { base: 'sand', patch: 'grass', block: 'rock', name: 'Dunes' },
+  { base: 'grass', patch: 'sand', block: 'rock', name: 'Valley' },
+  { base: 'concrete', patch: 'grass', block: 'urban', name: 'Outskirts' },
+];
+
+/** Ground connectivity: every spawn and strategic point reachable from spawn 0, and ore near every base. */
+export function mapIsPlayable(m: MapDef): boolean {
+  const seen = new Uint8Array(m.width * m.height);
+  const start = m.spawns[0];
+  const q = [start.ty * m.width + start.tx];
+  seen[q[0]] = 1;
+  while (q.length) {
+    const cur = q.pop()!;
+    const x = cur % m.width;
+    const y = (cur / m.width) | 0;
+    for (const [dx, dy] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ]) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= m.width || ny >= m.height) continue;
+      const ni = ny * m.width + nx;
+      if (seen[ni] || TILE_BLOCKED[m.tiles[ni]]) continue;
+      seen[ni] = 1;
+      q.push(ni);
+    }
+  }
+  const reach = (x: number, y: number) => seen[y * m.width + x] === 1;
+  if (!m.spawns.every((s) => reach(s.tx, s.ty)) || !m.strategicPoints.every((p) => reach(p.x, p.y)))
+    return false;
+  return m.spawns.every((s) => {
+    let ore = 0;
+    for (let j = -12; j <= 12; j++)
+      for (let i = -12; i <= 12; i++) if (m.tiles[(s.ty + j) * m.width + s.tx + i] === 'ore') ore++;
+    return ore > 4;
+  });
+}
+
+function randomCandidate(seed: number): MapDef {
+  const rnd = mulberry32(seed);
+  const theme = THEMES[Math.floor(rnd() * THEMES.length)];
+  const b = new MapBuilder(SIZE, SIZE, theme.base);
+  const ri = (lo: number, hi: number) => lo + Math.floor(rnd() * (hi - lo + 1));
+
+  // Features are drawn on the northern half; the southern half is its 180° rotation (fair for every spawn pair).
+  for (let k = 0; k < 6; k++) b.blob(ri(0, 63), ri(0, 31), 2 + rnd() * 3, theme.patch, rnd, 0.6);
+  for (let k = 0, n = ri(8, 16); k < n; k++)
+    b.blob(ri(2, 61), ri(10, 31), 0.8 + rnd() * 1.7, theme.block, rnd, 0.4);
+  for (let k = 0, n = ri(0, 2); k < n; k++)
+    b.blob(ri(14, 50), ri(14, 30), 1.5 + rnd() * 1.5, 'water', rnd, 0.3);
+  for (let k = 0, n = ri(1, 3); k < n; k++) {
+    const x = ri(14, 50);
+    const y = ri(12, 28);
+    b.line(x, y, x + ri(-6, 6), y + ri(3, 7), theme.block, 2);
+  }
+  for (const s of SPAWNS.slice(0, 1).concat(SPAWNS[2])) b.clearCircle(s.tx + 1, s.ty + 1, 9, theme.base);
+  b.line(7, 7, 31, 31, 'road', 2);
+  b.line(56, 7, 32, 31, 'road', 2);
+  // Ore: one home field per northern base (mirrored to the southern ones) and contested fields.
+  b.blob(15, 9, 2.2, 'ore', rnd, 0.25);
+  b.blob(48, 9, 2.2, 'ore', rnd, 0.25);
+  for (let k = 0, n = ri(2, 3); k < n; k++)
+    b.blob(ri(8, 56), ri(16, 28), 1.6 + rnd() * 0.6, 'ore', rnd, 0.25);
+  for (const s of SPAWNS) b.rect(s.tx - 1, s.ty - 1, 5, 5, 'concrete');
+
+  for (let y = SIZE / 2; y < SIZE; y++)
+    for (let x = 0; x < SIZE; x++) b.tiles[y * SIZE + x] = b.tiles[(SIZE - 1 - y) * SIZE + (SIZE - 1 - x)];
+
+  // Strategic points: the centre plus a mirrored pair, each on cleared ground.
+  const px = ri(12, 51);
+  const py = ri(14, 22);
+  const points = [
+    { x: 31, y: 31, name: 'Centre' },
+    { x: px, y: py, name: 'North Outpost' },
+    { x: SIZE - 1 - px, y: SIZE - 1 - py, name: 'South Outpost' },
+  ];
+  for (const p of points) {
+    for (let j = -1; j <= 1; j++)
+      for (let i = -1; i <= 1; i++)
+        if (TILE_BLOCKED[b.get(p.x + i, p.y + j) ?? 'sand']) b.set(p.x + i, p.y + j, theme.base);
+  }
+  return {
+    id: 'random',
+    name: `Random ${theme.name} #${seed % 10000}`,
+    description: `Randomly generated ${theme.name.toLowerCase()} battlefield (seed ${seed}). Mirrored for fairness.`,
+    width: SIZE,
+    height: SIZE,
+    tiles: b.tiles,
+    oreAmount: 1300,
+    spawns: SPAWNS,
+    strategicPoints: points,
+  };
+}
+
+/** Deterministic random map for `seed`; candidates that fail `mapIsPlayable` are re-rolled. */
+export function generateRandomMap(seed: number): MapDef {
+  const s0 = Math.abs(Math.floor(seed)) || 1;
+  for (let attempt = 0; attempt < 30; attempt++) {
+    const m = randomCandidate(s0 + attempt * 7919);
+    if (mapIsPlayable(m)) return { ...m, name: `Random ${m.name.split(' ')[1]} #${s0 % 10000}` };
+  }
+  return getMap('desert-storm');
+}
+
+const randomCache = new Map<number, MapDef>();
+
 const cache = new Map<MapId, MapDef>();
 const builders: Record<MapId, () => MapDef> = {
+  random: () => generateRandomMap(1),
   'desert-storm': buildDesertStorm,
   'urban-conflict': buildUrbanConflict,
   'river-crossing': () => parseTiledMap(riverCrossingJson as TiledMap, 'river-crossing'),
+  'highland-pass': () => parseTiledMap(highlandPassJson as TiledMap, 'highland-pass'),
+  snowfield: () => parseTiledMap(snowfieldJson as TiledMap, 'snowfield'),
+  'forest-warfare': () => parseTiledMap(forestWarfareJson as TiledMap, 'forest-warfare'),
+  'island-conflict': () => parseTiledMap(islandConflictJson as TiledMap, 'island-conflict'),
+  'industrial-zone': () => parseTiledMap(industrialZoneJson as TiledMap, 'industrial-zone'),
 };
 
-export function getMap(id: MapId): MapDef {
+/** Map by id. For `random`, `mapSeed` selects the generated map. */
+export function getMap(id: MapId, mapSeed?: number): MapDef {
+  if (id === 'random' && mapSeed !== undefined) {
+    let r = randomCache.get(mapSeed);
+    if (!r) {
+      r = generateRandomMap(mapSeed);
+      randomCache.set(mapSeed, r);
+    }
+    return r;
+  }
   let m = cache.get(id);
   if (!m) {
     m = builders[id]();
@@ -227,4 +359,6 @@ export const TILE_BLOCKED: Record<TileKind, boolean> = {
   rock: true,
   water: true,
   urban: true,
+  snow: false,
+  forest: true,
 };

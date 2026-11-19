@@ -100,6 +100,21 @@ export function Minimap({ controller, size = W }: { controller: GameController; 
         ctx.fill();
         ctx.stroke();
       }
+      // Capture the Flag: flag positions (public).
+      for (const f of world.flags) {
+        const col = world.players.find((pl) => pl.team === f.team)?.color ?? 0xffffff;
+        ctx.fillStyle = hex(col);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(f.x, f.y - 2.5);
+        ctx.lineTo(f.x + 2.5, f.y);
+        ctx.lineTo(f.x, f.y + 2.5);
+        ctx.lineTo(f.x - 2.5, f.y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
       // Camera footprint.
       const v = controller.cameraView;
       if (v.length === 4) {

@@ -7,3 +7,5 @@ export * from './world';
 export type * from './types';
 export { turnToward } from './systems/movement';
 export * from './tutorial';
+export * from './missions';
+export * from './progression';

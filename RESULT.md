@@ -357,7 +357,7 @@ Ghi chú: "playtest người thật" mình không tự làm được — thay b�
 | 4.3 | Survival trên giao diện: chọn ở màn Skirmish, HUD đếm đợt / thời gian tới đợt sau, cảnh báo hướng tấn công, màn kết quả   | ✅         |
 | 4.4 | **Tutorial**: chuỗi mục tiêu hướng dẫn (chọn quân, di chuyển, xây, sản xuất, chiếm điểm, phá đồn địch) + AI địch thụ động | ✅         |
 | 4.5 | **Importer Tiled JSON** → `MapDef` + **map thứ 3** làm bằng định dạng Tiled                                               | ✅         |
-| 4.6 | Mô phỏng cân bằng (độ dài trận theo độ khó), `pnpm check`, test trình duyệt Chrome/Edge/Firefox, cập nhật docs            | ⬜         |
+| 4.6 | Mô phỏng cân bằng (độ dài trận theo độ khó), `pnpm check`, test trình duyệt Chrome/Edge/Firefox, cập nhật docs            | ✅         |
 
 ## Nhật ký đợt 4
 
@@ -434,3 +434,354 @@ Ghi chú: "playtest người thật" mình không tự làm được — thay b�
   3 cầu, đối xứng 180°) + test chung cho mọi map tự áp dụng (spawn và điểm chiến lược đi tới được, có quặng gần mỗi căn cứ).
 - AI vs AI trên River Crossing (Normal/Hard, 6 trận): AI xây mỏ, giành cầu qua lại (4–18 lần đổi chủ), trận nào cũng có kết quả (5.7–20.3 phút).
 - Kiểm thử trình duyệt (Chrome) 4/4 PASS: map có trong danh sách + mô tả, vào trận đúng map, quân qua sông bằng cầu theo lệnh chuột phải; 0 lỗi console.
+
+### ✅ 4.6 Mô phỏng cân bằng, kiểm tra cuối, tài liệu
+- **Mô phỏng AI vs AI** (3 map × Normal/Hard × 3 cặp tính cách = 18 trận) cho thấy trận kết thúc quá sớm (thường 5–9 phút).
+  Truy vết từng 30 s: AI **Rush** bị giữ "chưa được tấn công" tới 4:12 nhưng vẫn sản xuất liên tục → dồn **61 quân / 12.100 credits** rồi quét sạch
+  đối thủ đang đầu tư công trình (Warlord chỉ có 15 quân).
+- Sửa (AI): trước giờ được tấn công lần đầu, AI **dừng sản xuất quân khi giá trị quân đạt 1.5× ngưỡng tấn công** (giữ tiền lại; phòng thủ vẫn ưu tiên).
+  Kết quả: trận Normal dài thêm ~1–1.5 phút (vd. 6.9→8.0, 7.0→8.2, 7.8→9.3 phút), hết hiện tượng "dồn 60 quân".
+- **Ghi chú trung thực:** độ dài trận AI vs AI vẫn ngắn hơn mục tiêu 20–35 phút (đa số 8–15 phút; Hard Rush vs Warlord ~6 phút vì Warlord tham phát triển —
+  quan hệ khắc chế bình thường của RTS). AI vs AI không đại diện cho trận có người chơi, nên mình **dừng tinh chỉnh ở đây** và cần bạn chơi thử.
+  Câu hỏi thiết kế để ngỏ: có thêm **giới hạn quân số (population cap)** không — master doc có nhắc "unit limitations" nhưng đó là thay đổi luật lớn.
+- `pnpm check`: typecheck ✅, lint ✅, test **49/49** (game-data 9, game-core 31, game-ai 6, server 3) ✅, build ✅.
+- **Trình duyệt:** 6 bộ test tự động (smoke 9, đợt 2: 8, đợt 3: 7, Survival 8, Tutorial 12, River Crossing 4 = **48 bài**) **PASS trên Chrome, Edge và Firefox**, 0 lỗi console.
+  Lần chạy đầu Tutorial trên Chrome hỏng 5 bài do mình sửa file menu đúng lúc test đang chạy (Vite tải lại trang); sau đó phát hiện thêm 1 bài kiểm tra
+  đọc HUD quá sớm (HUD cập nhật mỗi 100 ms) → sửa script cho chờ; chạy lại 5 lần liên tiếp đều 12/12. Game không phải sửa.
+- Tài liệu: `GAMEPLAY_SYSTEMS.md` (§5e Survival, §5f Tutorial), `AI_DESIGN.md` (§6c), `TECHNICAL_ARCHITECTURE.md` (quy trình map + chuẩn soạn map Tiled),
+  `TESTING.md`, `ART_ASSET_GUIDE.md`, `DEVELOPMENT_ROADMAP.md`, `CHANGELOG.md` (0.4.0), `README.md`; menu ghi v0.4.
+
+## Tổng kết đợt 4
+- Nội dung offline mới: **Survival** (5/10/15 đợt, 4 mức sức mạnh, AI đồng minh tùy chọn), **Tutorial** 8 bước, **importer Tiled** + map thứ 3 **River Crossing**.
+- Đóng lỗ hổng test AI sửa chữa; sửa lỗi tràn khung Match Setup; AI không còn "dồn quân" trước đợt tấn công đầu.
+- Chưa làm (theo yêu cầu / cần bạn): playtest người thật để chỉnh độ khó & độ dài trận; quyết định population cap; online; nâng cấp đồ họa.
+
+---
+
+# ĐỢT 5 — Tiếp tục phần offline còn lại (chưa online, chưa nâng cấp đồ họa)
+
+Phạm vi: các mục còn lại làm được mà không cần người chơi thật. Giới hạn quân số làm thành **tùy chọn** (bạn chơi thử rồi quyết định giữ hay tắt).
+
+| # | Công việc | Trạng thái |
+|---|---|---|
+| 5.1 | **Giới hạn quân số** (population cap): mỗi loại quân tốn điểm quân số, chọn 100 / 150 / 200 / không giới hạn; AI theo cùng luật; HUD hiển thị | ✅ |
+| 5.2 | **Chiến dịch** offline: khung nhiệm vụ có briefing + mục tiêu, 3 nhiệm vụ nối tiếp, lưu tiến độ, màn Campaign | ✅ |
+| 5.3 | **Map thứ 4** vẽ bằng định dạng Tiled | ✅ |
+| 5.4 | Mô phỏng lại độ dài trận với giới hạn quân số, `pnpm check`, test trình duyệt 3 trình duyệt, docs | ✅ |
+
+## Nhật ký đợt 5
+
+### ✅ 5.1 Giới hạn quân số (tùy chọn)
+- Mỗi loại quân tốn điểm quân số (`UNIT_SUPPLY`): bộ binh / drone 1, xe trinh sát / APC 2, tăng chủ lực / pháo / trực thăng 3, tăng hạng nặng 4.
+  Quân đang chờ trong hàng sản xuất cũng được tính. `MatchConfig.unitCap` (0 = không giới hạn).
+- Lệnh `produce` vượt giới hạn bị từ chối: "Unit limit reached (150)"; quân chết thì trả lại chỗ. AI theo **cùng luật** (không xếp hàng khi đã đầy).
+  Quân của đợt Survival không bị tính (đó là luật của chế độ chơi).
+- Màn Match Setup: ô **Unit limit** 100 / **150 (mặc định)** / 200 / Unlimited, được nhớ như các lựa chọn khác; Tutorial dùng 150.
+  HUD: bộ đếm `👥 45/150` trên thanh trên cùng (đỏ khi đầy), nút sản xuất bị khóa với lý do "Unit limit (150)".
+- Test: game-core +2 (chặn khi vượt, hàng chờ được tính, quân chết trả chỗ; mặc định không giới hạn).
+- **Đo trung thực:** 18 trận AI vs AI với giới hạn 100 và 150 cho độ dài **gần như y hệt** không giới hạn — sau bản sửa ở 4.6, quân AI hiếm khi chạm 100 điểm,
+  trận vẫn thường kết thúc khi đợt tấn công đầu thành công. Giới hạn quân số chặn "biển quân" cuối trận chứ **không** làm trận dài hơn.
+  Vì vậy để mặc định 150; giữ hay tắt tùy bạn sau khi chơi thử.
+
+### ✅ 5.2 Chiến dịch offline (3 nhiệm vụ)
+- Khung nhiệm vụ `game-core/missions.ts`: mỗi nhiệm vụ có tên, briefing, thiết lập trận cố định và danh sách mục tiêu. **Thắng trận = hoàn thành nhiệm vụ**.
+  `ObjectiveTracker` dùng chung: mục tiêu **theo thứ tự** (tutorial) hoặc **độc lập** (nhiệm vụ thường; xong rồi thì giữ trạng thái xong kể cả khi mất lại điểm).
+- 3 nhiệm vụ mở khóa lần lượt:
+  1. **Boot Camp** (Desert Storm) — chính là Tutorial 8 bước.
+  2. **Hold the River** (River Crossing, Survival 6 đợt Normal, 6000 credits) — xây Defense Turret, chiếm Central Bridge, đẩy lui 6 đợt.
+  3. **Iron Fist** (Urban Conflict, Decapitation 2v2 có AI đồng minh, 8000 credits) — xây War Factory, xây SAM Site, nghiên cứu Improved Munitions,
+     phá HQ của cả 2 đối thủ (Iron Guard – Fortress, Desert Hawks – Eagle chuyên trực thăng).
+- Giao diện: menu chính có **Campaign** (thay mục Tutorial); màn **Operations** liệt kê nhiệm vụ (✓ complete / available / 🔒 locked), briefing, map, credits,
+  giới hạn quân, mục tiêu, nút Start mission; trong trận có khung mục tiêu (tên nhiệm vụ, `1/3 done`, ✓); màn kết quả ghi "mission complete / mission failed",
+  nút **Next mission ▶**, **Retry mission**, **Campaign**. Tiến độ lưu trong trình duyệt (`shadow-front.campaign`).
+- **Cân bằng bằng mô phỏng** (thay người chơi bằng AI Normal, 3–6 seed):
+  - Hold the River: thắng 3/3 (~11 phút) → phù hợp nhiệm vụ 2.
+  - Iron Fist ban đầu (2 địch Normal, 6000 credits): **thua 6/6**. Hạ dần độ khó vẫn thua 5/6; thử thay Eagle bằng Rush thì thắng → nguyên nhân là **trực thăng**:
+    AI Normal không chọn quân khắc chế không quân (người chơi thì có). Giữ Eagle làm bài học của nhiệm vụ, thêm mục tiêu "Build a SAM Site" + cảnh báo trong briefing,
+    đối thủ về Easy, credits 8000. Mô phỏng với AI thay người không đại diện tốt cho nhiệm vụ này → cần bạn chơi thử.
+- **Sửa lỗi phát hiện khi mô phỏng:** bộ ngẫu nhiên của AI chỉ phụ thuộc id người chơi, **không phụ thuộc seed trận** → mỗi trận vs AI diễn ra y hệt nhau nếu người chơi làm giống nhau.
+  Giờ AI dùng seed của trận (`World.seed`), các trận khác nhau thật.
+- Test: game-core +4 (mọi nhiệm vụ tạo được world hợp lệ; mở khóa theo thứ tự; mục tiêu độc lập và giữ trạng thái; Iron Fist chỉ thắng khi cả 2 HQ địch bị phá).
+- Kiểm thử trình duyệt (Chrome) 11/11 PASS: danh sách 3 nhiệm vụ, chỉ nhiệm vụ 1 mở, nhiệm vụ khóa không bắt đầu được, Boot Camp có khung mục tiêu,
+  thắng → "mission complete" + lưu tiến độ, Next mission → Hold the River (Survival, River Crossing), mục tiêu hoàn thành không theo thứ tự,
+  thua → "mission failed" + Retry, màn Campaign hiện tiến độ; bộ Tutorial cũ (12 bài) chạy lại qua đường Campaign: PASS; 0 lỗi console.
+
+### ✅ 5.3 Map thứ 4 "Highland Pass" (Tiled) + nhiệm vụ 4
+- **Highland Pass** (`game-data/src/maps/highland-pass.json`): thị trấn có tường đá trên cao nguyên giữa map, có **quặng giàu** bên trong,
+  chỉ vào được qua **4 hẻm núi** (B/N/Đ/T); vùng thấp có đồng cỏ và tảng đá; đối xứng xoay 180°. Điểm chiến lược: North Pass, Town Square, South Pass.
+- Công cụ: phần chung của các generator tách ra `tools/tiled-lib.mjs` (canvas + vẽ + ghi Tiled JSON + ảnh tileset);
+  đã kiểm tra River Crossing sinh lại **giống từng byte** bản cũ. Map mới: `tools/gen-highland-pass.mjs`.
+- Map tự có trong Skirmish / Survival. AI vs AI trên map này (6 trận Normal/Hard): xây mỏ, chiếm hẻm, trận nào cũng có kết quả (6–12 phút).
+- **Nhiệm vụ 4 — Highland Siege** (1v1 vs AI Normal Warlord, Annihilation): chiếm Town Square, giữ cả 3 điểm cùng lúc, tiêu diệt toàn bộ địch.
+- Test: game-data +1 (Highland Pass: tên điểm, đối xứng, tường đá, 4 hẻm đi được, đủ quặng) + test chung cho mọi map (kết nối, quặng gần căn cứ);
+  game-core: thứ tự mở khóa đủ 4 nhiệm vụ, mỗi nhiệm vụ dùng đúng map.
+
+### ✅ 5.4 Kiểm tra cuối, tài liệu
+- `pnpm check`: typecheck ✅, lint ✅, test **57/57** (game-data 11, game-core 37, game-ai 6, server 3) ✅, build ✅.
+- **Trình duyệt** (Chrome, Edge, Firefox — không phải Internet Explorer, IE đã ngừng hỗ trợ và React 18 / Phaser 3 không chạy trên IE):
+  7 bộ test tự động (smoke 9, đợt 2: 8, đợt 3: 7, Survival 8, Tutorial 12, River + 4 map + giới hạn quân 7, Campaign 11 = **62 bài**) — **PASS trên cả 3 trình duyệt**, 0 lỗi console.
+  Ghi chú trung thực: trong lượt chạy tổng, Tutorial trên Firefox hỏng 1 lần ở bước click đặt Power Plant; chạy lại 6 lần liên tiếp đều 12/12 →
+  lỗi chập chờn của script test (thời điểm click), game không phải sửa.
+- Mô phỏng độ dài trận: xem 5.1 (giới hạn quân số không làm trận dài hơn trong AI vs AI) và 5.2 (cân bằng nhiệm vụ).
+- Tài liệu: `GAMEPLAY_SYSTEMS.md` (§5g giới hạn quân, §5h chiến dịch), `AI_DESIGN.md` (§6d), `TECHNICAL_ARCHITECTURE.md` (generator map),
+  `TESTING.md`, `DEVELOPMENT_ROADMAP.md`, `CHANGELOG.md` (0.5.0), `README.md`; menu ghi v0.5.
+
+## Tổng kết đợt 5
+- Mới: **Chiến dịch 4 nhiệm vụ** (Boot Camp → Hold the River → Iron Fist → Highland Siege) có briefing, mục tiêu, mở khóa, lưu tiến độ;
+  **giới hạn quân số** tùy chọn (mặc định 150); **map thứ 4 Highland Pass** (Tiled).
+- Sửa: AI không dùng seed trận → các trận vs AI giống hệt nhau; nay mỗi trận khác nhau.
+- Còn lại (cần bạn / đang hoãn): chơi thử thật để chỉnh độ khó & độ dài trận (AI vs AI vẫn 6–15 phút) và quyết định giữ giới hạn quân số;
+  online (Phase 6–7); đồ họa thật.
+
+---
+
+# ĐỢT 6 — Bổ sung tính năng còn thiếu theo `docs/PLAN.md` (phần chơi offline)
+
+Đã đối chiếu toàn bộ 18 nhóm trong `docs/PLAN.md` với game → bảng chi tiết ở **`docs/PLAN_STATUS.md`**.
+Phần cần online (tài khoản, bạn bè, chat, lobby online, PvP/Co-op online, matchmaking, ranking, admin) và đồ họa/âm thanh thật vẫn **hoãn** theo yêu cầu trước.
+Đợt này làm các mục còn thiếu chơi được offline:
+
+| # | Công việc | Mục PLAN | Trạng thái |
+|---|---|---|---|
+| 6.1 | Điều khiển: lệnh **Patrol**, **bán công trình (Sell)**, **kinh nghiệm/cấp bậc unit** | §7, §9 | ✅ |
+| 6.2 | Unit mới: **Sniper, Medic, Engineer** + **1 unit đặc trưng cho mỗi faction** | §5, §9 | ✅ |
+| 6.3 | Công trình mới: **Radar Station, Wall, Missile Launcher** | §7 | ✅ |
+| 6.4 | Chế độ **Domination** + **Random Map** | §4, §6 | ✅ |
+| 6.5 | **Hồ sơ người chơi offline**: nickname, level/XP, thống kê, lịch sử trận, thành tích | §2, §15 | ✅ |
+| 6.6 | Settings & âm thanh: **toàn màn hình**, **nhạc nền procedural**, âm lượng nhạc/hiệu ứng riêng, bảng phím tắt | §13, §14, §16 | ✅ |
+| 6.7 | AI dùng nội dung mới, test, trình duyệt Chrome/Edge/Firefox, docs | §11 | ✅ |
+
+## Nhật ký đợt 6
+
+### ✅ 6.1 Patrol, bán công trình, kinh nghiệm/cấp bậc unit
+- **Patrol** (phím **T** rồi click, hoặc nút Patrol): mỗi unit attack-move qua lại giữa chỗ đang đứng và điểm được chọn, gặp địch thì đánh rồi đi tiếp;
+  HUD ghi "Patrolling". Lệnh mới `patrol` (chỉ unit có vũ khí).
+- **Sell**: nút "$ Sell (+giá)" khi chọn công trình đã xây xong của mình (trừ HQ): hoàn **50% giá × % máu còn lại**, quân trong hàng chờ và nghiên cứu
+  đang chạy được hoàn đủ; ô đất được giải phóng; không tính là "mất công trình" trong thống kê. Lệnh mới `sell`, event `sold`.
+- **Veterancy**: unit nhận XP = giá trị thứ nó tiêu diệt (công trình tính 50%); đạt 1× / 2.5× / 5× giá của chính nó → **Veteran / Elite / Heroic**:
+  mỗi cấp +10% sát thương và +10% máu tối đa; Heroic tự hồi 1% máu/giây. Trụ phòng thủ không lên cấp. Event `promoted` → thông báo + âm thanh;
+  trên bản đồ có chữ V vàng (▲) trên đầu unit theo cấp; panel chọn unit ghi cấp bậc.
+- Test: game-core +6 (patrol đi tới rồi quay về và vẫn tiếp tục tuần tra; patrol từ chối unit không vũ khí; sell hoàn đúng tiền + giải phóng ô + không tính mất;
+  không bán được HQ / công trình địch / đang xây; XP → cấp → +sát thương/+máu, event; Heroic tự hồi máu; trụ phòng thủ tiêu diệt không lỗi).
+- Kiểm thử trình duyệt: gộp ở bước 6.7.
+
+### ✅ 6.2 Unit mới: Sniper, Medic, Engineer + unit đặc trưng cho mỗi faction
+- **Sniper** (Barracks, cần War Factory, 350): tầm 9 (bộ binh thường 5), 70 sát thương — 2 phát hạ một Rifleman; không bắn được xe giáp hiệu quả hay máy bay.
+- **Medic** (Barracks, 200): không vũ khí, tự hồi **8 máu/giây** cho bộ binh đồng minh bị thương gần nhất trong bán kính 3.
+- **Engineer** (Barracks, 300): không vũ khí, tự sửa **15 máu/giây** cho xe và công trình đồng minh trong bán kính 3, miễn phí (`systems/support.ts`).
+- **Unit đặc trưng** (chỉ faction đó sản xuất được; faction khác bị từ chối "not available to your faction" và không thấy nút):
+  | Faction | Unit | Vai trò |
+  |---|---|---|
+  | Western Alliance | **Ranger** (Special Forces) | bộ binh tinh nhuệ: nhanh, 160 máu, súng mạnh |
+  | Eastern Legion | **Rocket Launcher (MLRS)** | pháo phản lực bắn loạt, vùng nổ rộng |
+  | Pacific Technology | **Gunship** | trực thăng pháo xoay, diệt bộ binh |
+  | Desert Corps | **Light Tank** | xe tăng nhẹ rất nhanh để đánh tạt sườn |
+  | Iron Republic | **IFV** | xe chiến đấu bộ binh bọc giáp, bắn được cả máy bay |
+- Đồ họa: vẫn procedural — Sniper súng dài, Medic mũ trắng + chữ thập đỏ, Engineer mũ vàng + ba lô; unit faction dùng lại mô hình khung gần nhất
+  (trường `look`); icon HUD tương ứng. Giới hạn quân số đã có giá trị cho tất cả unit mới.
+- **AI**: chỉ chọn unit hợp faction; mọi tính cách đều thích unit đặc trưng; xây tối đa 2 Medic / 2 Engineer khi đã có ≥ 6 quân (ngẫu nhiên 15% mỗi lần chọn để không lấn quân chiến đấu).
+  Mô phỏng 3 trận Hard: AI dùng Ranger (13–47), Sniper (14–17), IFV, Medic / Engineer 2–6. Gunship / MLRS chỉ xuất hiện khi tính cách AI có sân bay / thích pháo.
+- Test: game-core +5 (mỗi faction đúng 1 unit đặc trưng; chỉ faction đó sản xuất được; Medic hồi bộ binh không hồi xe; Engineer sửa công trình, không sửa địch; Sniper vượt tầm).
+- **Phát hiện về quy trình kiểm tra:** lệnh `pnpm -s typecheck` (chế độ im lặng) **ẩn cả thông báo lỗi**, nên các lần kiểm tra nhanh giữa chừng bằng lệnh đó không đáng tin.
+  Các đợt trước vẫn ổn vì cuối mỗi đợt đều chạy `pnpm check` đầy đủ và lọc dòng lỗi; từ giờ không dùng `-s` nữa.
+
+### ✅ 6.3 Công trình mới: Radar Station, Wall, Missile Launcher
+- **Radar Station** (2×2, 1000, −40 điện, cần War Factory): tầm nhìn **20 ô** quanh căn cứ để thấy địch tới sớm; đĩa radar quay (animation).
+- **Wall** (1×1, 50, cần Barracks): khối bê tông 1500 máu chặn đường quân mặt đất; giữ **Shift + click** để đặt liên tiếp.
+- **Missile Launcher** (1×1, 1200, −40 điện, cần Research Center): bệ tên lửa chống mặt đất tầm **12** (xa hơn xe tăng), nổ lan nhỏ, **không bắn được máy bay**.
+- Bảng Construction đổi sang lưới 6 cột (11 công trình vừa 2 hàng). Icon + hình procedural cho cả 3.
+- AI: tính cách phòng thủ (Fortress, Warlord) xây 1 Missile Launcher khi có Research Center; AI Hard/Insane xây 1 Radar Station. AI không xây tường (tránh tự chặn đường).
+- Test: game-core +1 (tường chặn ô đi + xây được bằng lệnh; radar thấy xa 18+ ô; Missile Launcher bắn xe tăng, không bắn trực thăng).
+
+### ✅ 6.4 Chế độ Domination + Random Map
+- **Domination** (mission `domination`): mỗi điểm chiến lược team đang giữ cho **+1 điểm/giây**; team đầu tiên đạt **1500** thắng
+  (luật tiêu diệt vẫn áp dụng). Thanh trên cùng hiện `DOMINATION · YOU 240 · ENEMY 310 / 1500`.
+  Mốc ban đầu 600 làm trận kết thúc sau ~6.3 phút trong mô phỏng → nâng lên 1500 (giữ 2 điểm ≈ 12.5 phút, giữ cả 3 ≈ 8.3 phút).
+  Mô phỏng AI vs AI sau đó: trận kết thúc 7.8–9.6 phút do một bên bị tiêu diệt trước khi đạt điểm — cùng vấn đề nhịp trận như các chế độ khác.
+- **Random Map**: nút **🎲 Random** trong danh sách map + nút **🎲 New map** để đổi; map 64×64 sinh từ `mapSeed`, 3 chủ đề (Dunes / Valley / Outskirts),
+  đá, hồ, dãy núi, quặng nhà + quặng tranh chấp, đường, 3 điểm chiến lược (Centre + cặp Outpost), **đối xứng xoay 180°**;
+  ứng viên nào bị chặn (spawn / điểm không đi tới được, thiếu quặng gần căn cứ) sẽ bị **sinh lại** (`mapIsPlayable`). Xem trước trên minimap, seed được nhớ.
+  Dùng được cho Skirmish, Survival và Domination.
+- Test: game-data +1 (cùng seed → cùng map, khác seed → khác map, **40 seed đều chơi được**, cache); game-core +2 (Domination tính điểm & thắng ở mốc;
+  World dùng `mapSeed`). Sửa test MVP cũ ("8–12 loại unit" → bộ unit chung 8–12 + đúng 5 unit faction).
+
+### ✅ 6.5 Hồ sơ người chơi offline: level/XP, thống kê, lịch sử, thành tích
+- Logic thuần trong `game-core/progression.ts` (test được), lưu trong trình duyệt (`shadow-front.profile`, dữ liệu hỏng được làm sạch / tạo mới).
+- **XP mỗi trận** = 100 + 250 nếu thắng + 3/kill + 1/unit xây + 10/phút (tối đa 60 phút), × độ khó AI địch (Easy 1, Normal 1.25, Hard 1.6, Insane 2).
+  **Level**: lên cấp n → n+1 cần 500 + 250·(n−1) XP.
+- **Thống kê**: số trận, thắng/thua, tỉ lệ thắng, địch bị tiêu diệt, unit xây/mất, credits kiếm được, thời gian chơi, số trận thắng theo từng faction.
+- **Lịch sử**: 20 trận gần nhất (kết quả, chế độ, map, faction, thời gian, kill, XP).
+- **13 thành tích**: First Blood, First Victory, Veteran Commander (10 thắng), Hard Target, Beyond Insane, Blitzkrieg (< 10 phút), Last Stand (Survival ≥ 10 đợt),
+  Dominator, Explorer (thắng map ngẫu nhiên), Hero of the Front (unit lên Heroic), Centurion (100 kill), Campaign Complete, Master of Arms (thắng với cả 5 faction).
+- Giao diện: menu chính có **Profile** + thẻ góc phải (nickname, level, thanh XP, số thành tích); màn **Profile** (đổi nickname, chọn emblem faction, level,
+  thống kê, lưới thành tích 🏆/🔒, bảng lịch sử, nút reset có xác nhận); màn kết quả hiện **+XP**, **Level up!** và thành tích mới mở khóa.
+  Nickname của hồ sơ là tên mặc định trong Skirmish và Campaign.
+- Test: game-core +5 (bảng level; XP theo thắng/độ khó; cập nhật thống kê + lịch sử + mở khóa đúng một lần; các thành tích đặc biệt; giới hạn lịch sử + làm sạch dữ liệu lưu).
+
+### ✅ 6.6 Settings & âm thanh
+- **Nhạc nền procedural** (`game/music.ts`, Web Audio, không dùng file → không vướng bản quyền): menu là pad hợp âm chậm (Am–F–C–G),
+  trong trận thêm bass + trống nhịp đều. Tự đổi theo màn hình; bật sau thao tác đầu tiên của người chơi (chính sách autoplay của trình duyệt).
+- **Âm lượng riêng**: "Effects volume" và "Music volume" (mặc định 35%), có trong Settings và menu Pause; được lưu.
+- **Toàn màn hình**: nút "⛶ Toggle fullscreen" trong Settings và menu Pause.
+- **Bộ đếm FPS**: tùy chọn "Show FPS counter" — trước đây giá trị `showFps` có trong cài đặt nhưng **không được dùng ở đâu**; giờ hiện FPS thật ở góc màn hình trận.
+- **Bảng phím tắt** trong Settings (15 dòng, có phím mới T = Patrol, Shift+click đặt nhiều tường). Đổi phím (rebinding) chưa làm.
+- Ghi chú: mình không nghe được âm thanh — chỉ kiểm tra được bằng trạng thái AudioContext / lịch phát trong trình duyệt (bước 6.7). Chất lượng nhạc cần bạn nghe thử.
+
+
+---
+
+# ĐỢT 7 — Tiếp tục tính năng còn thiếu trong `docs/PLAN.md` (offline)
+
+Nguồn: các mục ⬜ trong `docs/PLAN_STATUS.md`. Vẫn chưa làm online / đồ họa thật.
+
+| # | Công việc | Mục PLAN | Trạng thái |
+|---|---|---|---|
+| 6.7 | (hoàn tất đợt 6) chạy lại test trình duyệt lỗi, ghi kết quả | — | ✅ |
+| 7.1 | **Chở quân**: APC chở 5 bộ binh, unit mới **Transport Helicopter** chở 6; công trình **Bunker** cho 4 bộ binh vào trú và bắn ra | §7, §9 | ✅ (AI chưa dùng) |
+| 7.2 | **Nâng cấp công trình** (cấp 2 cho phòng thủ & Power Plant) + **công nghệ riêng từng faction** | §5, §7 | ✅ |
+| 7.3 | Chế độ **Capture the Flag** | §4 | ✅ |
+| 7.4 | Địa hình mới **tuyết, rừng** + 4 map trong PLAN: **Snowfield, Forest Warfare, Island Conflict, Industrial Zone** | §6 | ✅ |
+| 7.5 | **Chọn màu quân đội**, **chuyển tiền cho đồng đội**, **đổi phím tắt**, **chế độ hiệu năng** | §3, §8, §13, §16 | ✅ |
+| 7.6 | **Nhiệm vụ ngày / tuần** + **danh hiệu** (offline) | §15 | ✅ |
+| 7.7 | AI dùng nội dung mới, test, trình duyệt Chrome/Edge/Firefox, docs | — | ✅ |
+
+## Nhật ký đợt 7
+
+### ✅ 6.7 AI dùng nội dung mới, kiểm tra, tài liệu
+- AI: xem 6.2 (unit faction, Medic/Engineer) và 6.3 (Radar, Missile Launcher); Domination dùng logic chiếm điểm sẵn có.
+- `pnpm check`: typecheck ✅, lint ✅, test **78/78** (game-data 13, game-core 56, game-ai 6, server 3) ✅, build ✅.
+- Bộ test trình duyệt mới **round6** (23 bài): thẻ hồ sơ + trang Profile + đổi nickname, Settings (âm lượng nhạc/hiệu ứng, toàn màn hình, bảng phím, FPS),
+  nhạc menu → nhạc trận, Domination trên map ngẫu nhiên + đổi map, nút công trình mới, đội hình theo faction (Ranger/Sniper/Medic/Engineer có, Light Tank/IFV ẩn),
+  sản xuất Medic, Sell qua HUD, Patrol bằng T + click (panel ghi "Patrolling"), lên cấp Heroic, +XP và thành tích ở màn kết quả, lịch sử trong Profile.
+- Kết quả 8 bộ × 3 trình duyệt (Chrome, Edge, Firefox): **tất cả PASS, 0 lỗi console** sau khi xử lý:
+  - `round2` "volume slider in pause menu" hỏng trên Chrome + Edge: test tìm nhãn cũ "Sound volume" — ở 6.6 đã đổi thành "Effects volume" + "Music volume"
+    → cập nhật test (game đúng).
+  - `smoke2` (Power Plant) và `tutorial` (Extractor) hỏng 1 lần trên Chrome, `river` / `campaign` trên Firefox lỗi "detached Frame" của driver
+    → chạy lại riêng đều PASS (lỗi chập chờn của script / driver, game không phải sửa).
+
+## Tổng kết đợt 6
+- Đã đối chiếu toàn bộ `docs/PLAN.md` → `docs/PLAN_STATUS.md`. Đã làm các mục offline giá trị nhất: Patrol, Sell, Veterancy, 8 unit mới (3 chung + 5 faction),
+  3 công trình mới, Domination, Random Map, hồ sơ người chơi offline (level/XP/thống kê/lịch sử/13 thành tích), nhạc nền, âm lượng riêng, toàn màn hình, bộ đếm FPS, bảng phím.
+- Phát hiện & sửa: `showFps` có trong cài đặt nhưng không dùng; `pnpm -s` che lỗi typecheck (đã đổi cách kiểm tra).
+
+### Kiểm tra đối chiếu PLAN / PLAN_STATUS / RESULT với code và docs (2026-11-19)
+- Code: `pnpm typecheck` ✅; `pnpm test` ✅ **78/78** (game-data 13, game-core 56, game-ai 6, server 3). Lần chạy đầu game-core báo lỗi dù mọi test đều qua;
+  chạy riêng và chạy lại toàn bộ đều pass → lỗi chập chờn khi chạy song song, chưa tìm ra nguyên nhân.
+- Các mục ✅ của đợt 6 trong `PLAN_STATUS.md` đều có trong code (unit, công trình, lệnh, Domination, Random Map, hồ sơ, nhạc, FPS, toàn màn hình).
+- **Đợt 7.1 đã làm một phần mà chưa ghi**: lệnh `load` / `unload`, `systems/transport.ts`, APC chở 5, Transport Helicopter chở 6, Bunker 4 chỗ (bắn khi có quân).
+  Chưa có nút HUD, AI chưa dùng, chưa có test → ghi 🟡.
+- Docs đã bổ sung phần còn thiếu:
+  - `GAME_DESIGN.md` (vẫn ở mức v0.1): thêm unit/công trình v0.6, unit faction, chế độ Survival/Campaign/Domination (trước ghi "future"), 4 map + Random Map, hồ sơ offline.
+  - `GAMEPLAY_SYSTEMS.md`: Sniper, quân số của unit mới, điều kiện tiên quyết mới, lệnh Patrol/Sell, công thức XP hồ sơ, §5j chở quân / Bunker (đang làm).
+  - `TECHNICAL_ARCHITECTURE.md`: đúng thứ tự system trong `World.step`, đủ danh sách event, module missions/progression, Random Map, âm thanh/nhạc procedural.
+  - `ART_ASSET_GUIDE.md`: texture cache, `UnitDef.look` cho unit mới, âm thanh procedural (không có file).
+  - `TESTING.md`: số test 13 / 56 / 6 / 3 và phạm vi mới.
+  - `PLAN_STATUS.md`: bỏ dòng §9 bị lặp; thêm Avatar (🟡 emblem), Bunker / Transport Heli / chở quân (🟡), §16 camera zoom, điều khiển bàn phím, độ nhạy chuột, độ phân giải.
+
+### ✅ 7.1 Chở quân + Bunker
+- **APC** chở **5** bộ binh; unit mới **Transport Helicopter** (Airfield, 900, không vũ khí) chở **6**, bay qua mọi địa hình,
+  chỉ thả quân được khi bên dưới có đất trống (trên mặt nước sẽ báo "No open ground below to unload").
+- Công trình mới **Bunker** (2×2, 600, 2200 máu, cần Barracks): tối đa **4** bộ binh trú bên trong; **chỉ bắn khi có người**, sát thương × số người trú;
+  người trú được che chắn hoàn toàn. Bunker bị phá hoặc bị bán → người bên trong thoát ra.
+- Cách dùng: chọn bộ binh → **chuột phải** lên APC / trực thăng / Bunker của mình để vào; panel hiện `👥 3/5 inside` + nút **Unload** (phím **U**).
+  Lính đang đi tới xe hiện trạng thái "Getting in"; xe đang chạy thì lính tự đuổi theo.
+- Luật: chỉ bộ binh lên được; quá sức chứa bị từ chối "Transport is full"; người bên trong vẫn tính vào giới hạn quân số;
+  xe bị phá → người bên trong chết theo (tính vào thống kê mất quân). Lệnh mới `load` / `unload`, event `boarded` / `unloaded`.
+- Cách làm: người lên xe tạm rời khỏi bản đồ (lưu trong `passengers` của xe/bunker) nên di chuyển, chiến đấu, sương mù, chọn quân tự bỏ qua họ.
+- AI: chưa dùng chở quân / bunker (không xây Transport Helicopter) — ghi nhận là giới hạn hiện tại.
+- Đồ họa procedural: Bunker bê tông màu ô liu có khe bắn, bao cát, súng máy trên nóc; icon mới. Trực thăng vận tải dùng mô hình trực thăng có sẵn.
+- Test: game-core +5 (lên APC, theo xe, thả quân cạnh xe; sức chứa + chết theo xe; trực thăng không thả trên nước nhưng thả được trên đất;
+  Bunker im lặng khi trống, bắn khi có 4 người, phá thì người thoát ra; chỉ bộ binh vào bunker + bán bunker thả người).
+  Lần chạy đầu test thất bại do **mình đặt lính ngay trên dãy đá** của map (không phải lỗi code) → dời vị trí test.
+
+### ✅ 7.2 Công nghệ riêng từng faction + nâng cấp công trình
+- **Công nghệ faction** (Research Center, chỉ faction đó nghiên cứu được; faction khác không thấy và bị từ chối):
+  | Faction | Công nghệ | Hiệu ứng |
+  |---|---|---|
+  | Western Alliance | Combat Medkits | bộ binh +25% máu tối đa |
+  | Eastern Legion | Reactive Armor | unit giáp nặng nhận ít hơn 15% sát thương |
+  | Pacific Technology | Nano Repair | xe và máy bay tự hồi 0.5% máu/giây |
+  | Desert Corps | Turbo Engines | xe và pháo nhanh hơn 15% |
+  | Iron Republic | Fortified Structures | mọi công trình +25% máu tối đa |
+  Áp dụng cho cả unit/công trình đang có và cái mới.
+- **Nâng cấp công trình lên Level 2** (nút "⬆ Upgrade (giá)" trong panel, hiện % tiến độ; tên ghi "★ Level 2"; thiếu điện thì chậm lại):
+  Power Plant (400: +20% máu, **+50% điện**), Defense Turret / SAM Site (500: +50% máu, **+50% sát thương**),
+  Missile Launcher (700: +40% / +40%), Bunker (400: +60% máu). Bán công trình đang nâng cấp → hoàn tiền nâng cấp. Lệnh `upgrade`, event `upgraded`.
+- **AI**: nghiên cứu công nghệ faction sau danh sách theo tính cách; tính cách có phòng thủ nâng cấp công trình khi dư ≥ giá + 800.
+- Test: game-core +5 (mỗi faction đúng 1 công nghệ + chặn faction khác; Medkits / Turbo / Fortified áp cho cái cũ và mới;
+  Reactive Armor giảm sát thương, Nano Repair hồi máu; nâng cấp trừ tiền, mất thời gian, ra chỉ số Level 2, chặn nâng cấp lặp;
+  Power Plant Level 2 +50% điện, HQ không nâng cấp được).
+
+### ✅ 7.3 Chế độ Capture the Flag
+- Mission `ctf`: mỗi team có **1 lá cờ** cắm cách HQ vài ô (về phía giữa map). Quân **mặt đất** của địch chạm cờ → nhặt cờ (máy bay không nhặt được);
+  lính cầm cờ **chậm còn 60%**; lính cầm cờ chết (hoặc lên xe) → cờ **rơi tại chỗ**; quân của chủ cờ chạm vào cờ rơi → cờ **về nhà ngay**;
+  mang cờ địch về **điểm cắm cờ của mình khi cờ mình đang ở nhà** → +1. **3 lần** trước thì thắng (luật tiêu diệt vẫn áp dụng).
+- Giao diện: chọn "Capture the Flag" trong Match Setup; bản đồ có vòng tròn điểm cắm cờ + cờ màu team (cờ được mang theo lính, cờ rơi nhấp nháy);
+  minimap có hình thoi màu cho từng cờ; thanh trên cùng `CAPTURE THE FLAG · YOU 1 · ENEMY 0 / 3 · OUR FLAG TAKEN`;
+  thông báo + âm thanh + ping minimap khi cờ mình bị cướp; thông báo khi cờ rơi / về nhà / bị chiếm.
+- AI: tổ 4 quân nhanh nhất đi cướp cờ địch (vị trí cờ là thông tin công khai), lính cầm cờ chạy thẳng về nhà, quân ở nhà truy đuổi khi cờ mình bị mất.
+- Mô phỏng AI vs AI (3 map): có cướp / rơi / trả cờ thật; trận 5–8.5 phút. **Rush luôn thắng** vì tấn công sớm — cùng vấn đề nhịp độ AI đã ghi nhận;
+  đã thêm luật cầm cờ chậm 60% (trước đó 4.9–7.3 phút) nhưng không đổi kết quả. Cần chơi thử để chỉnh.
+- Test: game-core +4 (mỗi team 1 cờ trên ô đi được gần HQ, chế độ khác không có cờ; nhặt → mang → chiếm, trả cờ về, 3 lần thì thắng;
+  lính cầm cờ chết → rơi, chủ cờ chạm → về nhà; không chiếm được khi cờ mình đang bị cướp, máy bay không nhặt cờ).
+
+### ✅ 7.4 Địa hình tuyết / rừng + 4 map trong PLAN
+- Loại ô mới: **snow** (đi được, nền trắng có vệt tuyết) và **forest** (chặn đường, vẽ 1–2 cây mỗi ô). Thêm vào **cuối** danh sách loại ô
+  để mã ô của các map Tiled cũ không đổi (đã kiểm tra bằng git: River Crossing chỉ đổi metadata tileset, không đổi dòng địa hình nào).
+- 4 map mới (Tiled JSON, sinh bằng `tools/gen-plan-maps.mjs`, đối xứng xoay 180°, 4 spawn, 3 điểm chiến lược):
+  | Map | Đặc điểm |
+  |---|---|
+  | **Snowfield** | đồng tuyết, rừng thông, hồ băng, dãy đá — tầm nhìn xa, ít nút thắt |
+  | **Forest Warfare** | rừng rậm chia bởi đường mòn và khoảng trống — phục kích, quân phải đi theo lối |
+  | **Island Conflict** | căn cứ trên đảo nối bằng các con đường đắp cát quanh một đảo giữa — máy bay mạnh, quân bộ dồn ở chỗ qua |
+  | **Industrial Zone** | nhà máy, bãi đường ray, kênh đào có cầu — phố hẹp hợp bộ binh và giáp tầm gần |
+- **Lỗi bắt được nhờ test kết nối**: bản đầu của Island Conflict có căn cứ không đi tới được — (1) đảo giữa không được vẽ vì truyền tâm 31.5
+  (tọa độ lẻ làm `set` ghi vào chỉ số không nguyên), (2) đường đắp phía tây chỉ có ở nửa bắc. Đã sửa map và cho `set` làm tròn tọa độ.
+- Sửa test MVP: bộ unit chung giờ 13 loại (thêm Transport Helicopter) → giữ mức tối thiểu 8 của MVP, bỏ giới hạn trên 12.
+- Mô phỏng AI vs AI Normal (12 trận): mọi map chơi được; trận **9–31 phút** (1 trận hòa 40 phút ở Island Conflict) — dài hơn các map cũ nhờ nhiều nút thắt.
+
+### ✅ 7.5 Chọn màu quân, chuyển tiền cho đồng đội, đổi phím tắt, chế độ hiệu năng
+- **Màu quân đội**: Match Setup có hàng "Army colour" (auto = màu faction, hoặc 8 màu); màu đã có người dùng thì tự đổi sang màu trống. `MatchSlot.color`.
+- **Chuyển tiền cho đồng đội**: nút **+500◆** cạnh tên đồng minh còn sống trong bảng người chơi (góc phải); lệnh `transfer` chỉ cho đồng đội,
+  không cho người đã bị loại, không âm, không quá số tiền đang có; thông báo cho cả hai bên.
+- **Đổi phím tắt**: Settings → Controls: bấm vào phím của hành động rồi nhấn phím mới (Esc hủy); trùng phím thì hai hành động **đổi chỗ**;
+  các phím cố định (WASD / mũi tên, 1–9, Esc, - / =, F10, Tab) không gán được; có nút "Reset keys to defaults". Áp dụng ngay trong trận
+  (Attack-move, Patrol, Stop, Hold, Retreat, Select army, Unload, Alert, Pause). Được lưu, dữ liệu hỏng thì trở về mặc định.
+- **Chế độ hiệu năng**: Settings → "Performance mode": giữ khoảng 1/3 hạt hiệu ứng (giới hạn 350 thay vì 1400), bỏ vết cháy trên mặt đất.
+- Test: game-core +2 (chuyển tiền: hợp lệ / khác team / quá tiền / âm / đồng đội bị loại; màu được chọn + màu trùng tự đổi). Đổi phím kiểm tra trên trình duyệt (7.7).
+
+### ✅ 7.6 Nhiệm vụ ngày / tuần + danh hiệu (offline)
+- **Nhiệm vụ**: mỗi ngày 3 nhiệm vụ (chọn từ 6), mỗi tuần 3 nhiệm vụ (chọn từ 5) — chọn **cố định theo ngày / tuần ISO (UTC)** nên ổn định, không đổi khi mở lại game.
+  Ví dụ: thắng 1 trận (+150 XP), tiêu diệt 30 địch, xây 25 unit, chơi 20 phút, thắng Domination/CTF, vượt 5 đợt Survival; tuần: thắng 5 trận (+600),
+  tiêu diệt 300 địch, thắng AI Hard/Insane (+800), chơi 2 giờ, thắng với 3 faction khác nhau (+700).
+  Tiến độ cộng sau mỗi trận, xong thì **tự nhận XP** (chỉ một lần mỗi kỳ); sang ngày / tuần mới thì tiến độ kỳ đó làm lại.
+- **Danh hiệu**: Recruit → Lieutenant (lv 5) → Captain (10) → Major (20) → Colonel (35) → General (50), và Hero of the Front / Survivor / Strategist / Warmaster
+  theo thành tích. Chọn trong Profile (danh hiệu chưa mở bị khóa + ghi điều kiện); hiện trên thẻ ở menu chính; danh hiệu bị khóa thì hiển thị Recruit.
+- Giao diện: Profile có mục **Challenges** (thanh tiến độ, ✔ khi xong, phần thưởng) và ô **Title**; màn kết quả hiện nhiệm vụ vừa hoàn thành (+XP) và danh hiệu mới.
+- Test: game-core +4 (khóa tuần ISO đúng cả các ngày biên: 2021-01-01 → 2020-W53, 2024-12-30 → 2025-W01; 3+3 nhiệm vụ ổn định trong kỳ và thay đổi giữa các ngày;
+  phần thưởng chỉ nhận một lần, sang ngày mới làm lại; danh hiệu mở theo level / thành tích, danh hiệu bị khóa hiển thị Recruit).
+
+### ✅ 7.7 AI dùng nội dung mới, kiểm tra, trình duyệt, tài liệu
+- AI: dùng unit / công nghệ riêng của faction, nâng cấp công trình (khi dư tiền), chơi CTF (giữ cờ nhà + cử nhóm nhanh đi cướp cờ);
+  RNG của AI lấy theo seed trận nên mô phỏng lặp lại được. **Chưa dùng** chở quân (APC / Transport Helicopter) và Bunker.
+- `pnpm check`: typecheck ✅, lint ✅, test **102/102** ✅, build ✅.
+- Bộ test trình duyệt mới **round7** (27 bài):
+  - Đổi phím Patrol → V, phím W bị từ chối vì là phím cố định; chế độ hiệu năng; Profile có nhiệm vụ ngày/tuần + danh hiệu bị khóa.
+  - CTF trên Snowfield với màu tự chọn + AI đồng minh; +500 tiền cho đồng minh; cảnh báo "Our flag has been taken".
+  - Chuột phải vào APC → bộ binh lên xe, hàng chở hiện "n/5", U thả quân; sau khi đổi phím, T không còn tác dụng và V = patrol (panel ghi đúng "Patrol V").
+  - Nâng cấp turret "Upgrade (500)", có Bunker trong bảng xây, Research Center chỉ hiện công nghệ của faction mình.
+  - Thắng CTF → màn kết quả có +XP; Forest / Island / Industrial tải được.
+- Sửa trong lúc test: nhãn phím trên panel lệnh và gợi ý giờ **đổi theo phím đã gán** (trước đó vẫn ghi phím mặc định).
+- Kết quả 9 bộ × 3 trình duyệt (Chrome, Edge, Firefox): **tất cả PASS (112/112 bài mỗi trình duyệt), 0 lỗi console**.
+  Lần chạy đầu trên Firefox bị dừng vì lỗi `fork` của shell (không phải lỗi game) → chạy lại toàn bộ Firefox đều PASS.
+- Tài liệu cập nhật v0.7: CHANGELOG, README, GAMEPLAY_SYSTEMS, AI_DESIGN, TESTING, DEVELOPMENT_ROADMAP, PLAN_STATUS
+  (giữ nguyên phần người khác đã sửa, chỉ cập nhật các mục liên quan); chữ phiên bản ở menu chính → v0.7.
+
+## Tổng kết đợt 7
+- Đã xong: chở quân (APC, Transport Helicopter, Bunker), nâng cấp công trình, công nghệ riêng từng faction, chế độ Capture the Flag,
+  địa hình tuyết / rừng và 4 map mới (tổng 8 map + map ngẫu nhiên), chọn màu quân, chuyển tiền cho đồng đội, đổi phím tắt, chế độ hiệu năng,
+  nhiệm vụ ngày / tuần, danh hiệu.
+- Chất lượng: 102 unit test, 9 bộ test trình duyệt PASS trên Chrome / Edge / Firefox.
+- Còn lại (offline): AI chưa dùng chở quân / Bunker; nhịp chơi Rush còn quá mạnh; chưa có Fighter Jet, Bomber, Mobile Command Vehicle;
+  chưa có đội hình (formation), trình sửa map, chọn ngôn ngữ, tùy chỉnh chất lượng đồ họa.
+- Tạm hoãn theo yêu cầu: toàn bộ phần online (tài khoản, chat, lobby, PvP, xếp trận, admin) và đồ họa / âm thanh thật.

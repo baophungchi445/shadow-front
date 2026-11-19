@@ -26,6 +26,8 @@ All numbers live in `packages/game-data`. This document defines rules, not balan
 - Placement rules: footprint inside map, all tiles buildable, not overlapping, within build radius of an existing friendly building (except HQ), not on unexplored tiles.
 - Construction: building spawns with `progress = 0`, HP grows with progress, completes after `buildTime`.
 - Prerequisites: e.g. War Factory requires Barracks; Airfield and Research Center require War Factory; Heavy Tank requires Research Center.
+  v0.6: Radar Station requires War Factory, Wall requires Barracks, Missile Launcher requires Research Center; Sniper and Ranger require War Factory,
+  MLRS requires Research Center.
 - Production queue per producer (max 5). Produced units spawn at the nearest free tile next to the building and move to the rally point.
 
 ## 5. Combat
@@ -35,7 +37,8 @@ All numbers live in `packages/game-data`. This document defines rules, not balan
 - Projectiles travel with finite speed; damage applies on arrival (hit detection at impact point). Artillery uses splash.
 - Auto-acquire: idle / attack-moving units pick the best target within vision (priority: can-hit-back → lowest HP ratio → nearest).
 - Stances: `aggressive` (default: chase within leash), `hold` (fire only in range, never move), `move` (ignore enemies until arrival).
-- Commands: Move, Attack (focus fire), Attack-Move, Hold Position, Stop, Retreat (move to HQ ignoring enemies).
+- Commands: Move, Attack (focus fire), Attack-Move, Hold Position, Stop, Retreat (move to HQ ignoring enemies), Patrol (v0.6).
+  Building commands: Build, Cancel build, Produce, Cancel, Rally, Research, Cancel research, Repair, Sell (v0.6).
 - Destruction emits events for explosion/smoke effects; buildings leave rubble.
 
 ### Counter multipliers (rows = weapon, cols = armor)
@@ -91,6 +94,63 @@ Owner toggles repair on a completed, damaged building. A full 0→100% repair ta
 - Objectives are completed strictly in order (`TutorialTracker`): select units → move → Power Plant → Resource Extractor → Barracks →
   train 3 units → capture a strategic point → destroy the outpost.
 
+## 5g. Population cap (v0.5, optional)
+
+- `MatchConfig.unitCap` (0 = unlimited; setup offers 100 / 150 (default) / 200 / unlimited). Supply per unit (`UNIT_SUPPLY`): infantry and drones 1,
+  recon vehicle and APC 2, MBT / artillery / helicopter 3, heavy tank 4. Units waiting in production queues count.
+  v0.6 units: Sniper / Medic / Engineer / Ranger 1, Light Tank 2, MLRS / Gunship / IFV 3.
+- `produce` over the cap fails with "Unit limit reached (N)"; dead units free supply. Survival wave units are not counted.
+
+## 5h. Campaign (v0.5, offline)
+
+- `game-core/missions.ts`: each mission has a briefing, a fixed `MatchConfig` (with `campaignMission`) and objectives tracked by `ObjectiveTracker`
+  (ordered for the tutorial, independent otherwise; a completed objective stays completed). Winning the match completes the mission.
+- Missions unlock in order: 1 Boot Camp (tutorial, Desert Storm) → 2 Hold the River (Survival 6 waves, River Crossing) →
+  3 Iron Fist (2v2 decapitation with an AI ally, Urban Conflict) → 4 Highland Siege (1v1 annihilation, Highland Pass).
+  Progress is stored per browser (`shadow-front.campaign`).
+
+## 5i. v0.6 additions
+
+- **Patrol** (`patrol` command): armed units attack-move between their start position and the target, turning around on arrival.
+- **Sell** (`sell` command): completed buildings except the HQ; refund = 50% of the price × HP ratio, plus full refund of queued units and running research.
+  Not counted as a lost building.
+- **Veterancy**: XP = cost of destroyed enemies (buildings 50%); ranks at 1× / 2.5× / 5× the unit's own cost → Veteran / Elite / Heroic,
+  +10% damage and +10% max HP per rank; Heroic regenerates 1% max HP per second. Defensive buildings do not gain ranks.
+- **Sniper** (Barracks, 350): range 9 and 70 damage per shot (two shots kill a Rifleman); ineffective vs armor and cannot hit aircraft.
+- **Support units**: Medic heals 8 HP/s to the most wounded friendly infantry within 3 tiles; Engineer repairs 15 HP/s to vehicles and completed
+  buildings within 3 tiles (free).
+- **Faction units** (`UnitDef.faction`, only that faction can produce them): Western Ranger, Eastern MLRS, Pacific Gunship, Desert Light Tank, Iron IFV.
+- **Buildings**: Radar Station (vision 20), Wall (blocks ground units, 50 credits), Missile Launcher (rocket, range 12, splash 1, ground only).
+- **Domination** (`mission: 'domination'`): every owned point gives its team 1 point per second; first team to 1500 wins; annihilation still applies.
+- **Random map** (`mapId: 'random'`, `mapSeed`): 3 themes, obstacles, lakes, ridges, ore, 3 points, 180° symmetry; candidates failing
+  `mapIsPlayable` (connectivity, ore near bases) are re-rolled.
+- **Offline profile** (`game-core/progression.ts`): XP per match, levels (500 + 250·(n−1) XP each), statistics, 20-match history, 13 achievements.
+  Match XP = 100 + 250 on victory + 3 per kill + 1 per unit built + 10 per minute (max 60 min), × enemy AI difficulty (Easy 1, Normal 1.25, Hard 1.6, Insane 2).
+
+## 5j. Transport & bunker (v0.7)
+
+- `load` / `unload` commands; infantry walk to the carrier and are removed from the world while inside (`passengers`). Capacity: APC 5,
+  Transport Helicopter 6 (unarmed, Airfield, 900), Bunker 4 (Barracks, 600, 2×2).
+- A bunker only fires while garrisoned; its damage grows with the number of occupants. Bunker occupants escape when it is destroyed;
+  passengers of a destroyed vehicle die with it. Passengers keep counting toward the population cap.
+- HUD: right-click a friendly carrier with infantry selected to board; the panel shows `inside N/M` and an **Unload** button (key **U**).
+  A Transport Helicopter only unloads over open ground. Events `boarded` / `unloaded`. Covered by game-core tests.
+- Not done yet: the AI does not use transports or bunkers.
+
+## 5j. v0.7 additions
+
+- **Transports / garrison** (`load`, `unload`): APC 5, Transport Helicopter 6 (unloads only above open ground), Bunker 4. Passengers leave the world
+  (stored in `passengers`), still count toward the population cap, die with a destroyed vehicle and escape a destroyed / sold bunker.
+  A bunker's weapon fires only when occupied, damage × occupants.
+- **Building upgrades** (`upgrade`, `BuildingDef.upgrade`): Power Plant (+20% HP, +50% power), Defense Turret / SAM (+50% HP and damage),
+  Missile Launcher (+40% / +40%), Bunker (+60% HP); slowed by low power; selling refunds a running upgrade.
+- **Faction technologies** (`ResearchDef.faction`): Combat Medkits (Western, infantry +25% HP), Reactive Armor (Eastern, heavy armor −15% damage),
+  Nano Repair (Pacific, vehicles & aircraft +0.5% HP/s), Turbo Engines (Desert, vehicles +15% speed), Fortified Structures (Iron, buildings +25% HP).
+- **Capture the Flag** (`mission: 'ctf'`): one flag per team near its HQ; enemy ground units pick it up, carriers move at 60%, a dropped flag
+  returns home when its owner touches it, a capture needs your own flag at home; 3 captures win.
+- **Terrain**: `snow` (walkable), `forest` (blocked). Maps: Snowfield, Forest Warfare, Island Conflict, Industrial Zone (Tiled, mirrored).
+- **Teams**: army colour per slot (`MatchSlot.color`), credit transfers to living teammates (`transfer`).
+
 ## 6. Fog of War
 
 - Per team: `explored` (ever seen) and `visible` (seen now) bitsets, recomputed at 4 Hz from vision radius of units and buildings.
@@ -105,4 +165,5 @@ Owner toggles repair on a completed, damaged building. A full 0→100% repair ta
 
 ## 8. Acceptance criteria
 
-- Unit tests cover: iso conversion, A*, placement validation, credit deduction/refund, power, damage multipliers, targeting, fog, control points, research, repair, survival waves and victory, tutorial objectives, Tiled map import.
+- Unit tests cover: iso conversion, A*, placement validation, credit deduction/refund, power, damage multipliers, targeting, fog, control points, research, repair, survival waves and victory, tutorial objectives, Tiled map import, population cap, campaign missions, patrol, sell, veterancy,
+  faction-restricted production, medic/engineer support, new buildings, domination scoring, random maps, offline progression.

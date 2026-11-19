@@ -1,4 +1,5 @@
 import type { MatchConfig, PlayerId } from '@shadow-front/shared-types';
+import { DEFAULT_UNIT_CAP } from '@shadow-front/game-data';
 import type { World } from './world';
 
 /** UI facts the simulation cannot know (what the player has selected). */
@@ -6,6 +7,7 @@ export interface TutorialInput {
   selectedOwnUnits: number;
 }
 
+/** One objective (tutorial step or mission goal). */
 export interface TutorialStep {
   id: string;
   title: string;
@@ -13,7 +15,7 @@ export interface TutorialStep {
   done: (world: World, pid: PlayerId, ui: TutorialInput) => boolean;
 }
 
-const enemyOf = (world: World, pid: PlayerId) =>
+export const enemyOf = (world: World, pid: PlayerId) =>
   world.players.find((p) => p.team !== world.players[pid].team);
 
 /** Guided objectives, completed strictly in order. */
@@ -68,27 +70,62 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   },
 ];
 
-/** Tracks the current tutorial step for one player. */
-export class TutorialTracker {
-  index = 0;
-  constructor(readonly steps: TutorialStep[] = TUTORIAL_STEPS) {}
+/**
+ * Tracks objectives for one player. `ordered` objectives must be completed one after another (tutorial);
+ * unordered ones complete independently (campaign missions). A completed objective stays completed.
+ */
+export class ObjectiveTracker {
+  readonly done: boolean[];
+  constructor(
+    readonly steps: TutorialStep[],
+    readonly ordered = true,
+  ) {
+    this.done = steps.map(() => false);
+  }
+
+  /** Index of the first unfinished objective (=== steps.length when all are done). */
+  get index(): number {
+    const i = this.done.indexOf(false);
+    return i < 0 ? this.steps.length : i;
+  }
+
+  /** Marks the first `n` objectives done (used to resume or skip). */
+  set index(n: number) {
+    this.done.forEach((_, i) => (this.done[i] = i < n));
+  }
 
   get finished(): boolean {
-    return this.index >= this.steps.length;
+    return this.done.every(Boolean);
   }
 
   get current(): TutorialStep | null {
     return this.steps[this.index] ?? null;
   }
 
-  /** Advances past every satisfied step (in order). Returns the steps completed by this call. */
+  /** Re-checks objectives. Returns the ones completed by this call. */
   update(world: World, pid: PlayerId, ui: TutorialInput): TutorialStep[] {
     const completed: TutorialStep[] = [];
-    while (!this.finished && this.steps[this.index].done(world, pid, ui)) {
-      completed.push(this.steps[this.index]);
-      this.index++;
+    if (this.ordered) {
+      while (!this.finished && this.steps[this.index].done(world, pid, ui)) {
+        completed.push(this.steps[this.index]);
+        this.done[this.index] = true;
+      }
+    } else {
+      this.steps.forEach((s, i) => {
+        if (!this.done[i] && s.done(world, pid, ui)) {
+          this.done[i] = true;
+          completed.push(s);
+        }
+      });
     }
     return completed;
+  }
+}
+
+/** Tutorial objectives, completed strictly in order. */
+export class TutorialTracker extends ObjectiveTracker {
+  constructor(steps: TutorialStep[] = TUTORIAL_STEPS) {
+    super(steps, true);
   }
 }
 
@@ -99,6 +136,7 @@ export function tutorialConfig(name = 'Commander', seed = 1): MatchConfig {
     mission: 'tutorial',
     startingCredits: 8000,
     seed,
+    unitCap: DEFAULT_UNIT_CAP,
     slots: [
       { kind: 'human', name, faction: 'western', team: 0 },
       { kind: 'ai', name: 'Enemy Outpost', faction: 'eastern', team: 1, difficulty: 'easy' },

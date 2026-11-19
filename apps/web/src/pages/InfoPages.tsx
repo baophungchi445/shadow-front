@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import {
   BUILDABLE,
   BUILDINGS,
@@ -10,6 +11,14 @@ import {
 } from '@shadow-front/game-data';
 import type { ArmorClass, WeaponType } from '@shadow-front/shared-types';
 import { useApp } from '../stores/appStore';
+import {
+  ACTION_LABELS,
+  DEFAULT_KEYS,
+  HOTKEY_ACTIONS,
+  keyLabel,
+  rebind,
+  type HotkeyAction,
+} from '../game/keybinds';
 import { Icon, hex } from '../components/Icon';
 
 function Shell({ title, children }: { title: string; children: React.ReactNode }) {
@@ -143,19 +152,115 @@ export function ArmyPage() {
 
 export function VolumeSlider() {
   const { settings, updateSettings } = useApp();
-  return (
+  const row = (label: string, value: number, set: (v: number) => void, testId: string) => (
     <label className="flex items-center justify-between gap-4">
-      <span>Sound volume</span>
+      <span>{label}</span>
       <input
         type="range"
         min={0}
         max={1}
         step={0.05}
-        value={settings.volume}
-        onChange={(e) => updateSettings({ volume: Number(e.target.value) })}
+        value={value}
+        data-testid={testId}
+        onChange={(e) => set(Number(e.target.value))}
       />
-      <span className="w-8 tabular-nums text-gray-400">{Math.round(settings.volume * 100)}</span>
+      <span className="w-8 tabular-nums text-gray-400">{Math.round(value * 100)}</span>
     </label>
+  );
+  return (
+    <div className="space-y-3">
+      {row('Effects volume', settings.volume, (v) => updateSettings({ volume: v }), 'sfx-volume')}
+      {row('Music volume', settings.musicVolume, (v) => updateSettings({ musicVolume: v }), 'music-volume')}
+    </div>
+  );
+}
+
+/** Toggles browser fullscreen for the whole page. */
+export function FullscreenButton() {
+  const toggle = () => {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void document.documentElement.requestFullscreen?.().catch(() => undefined);
+  };
+  return (
+    <button className="btn" onClick={toggle} data-testid="fullscreen">
+      ⛶ Toggle fullscreen
+    </button>
+  );
+}
+
+/** Fixed mouse / camera controls (not rebindable). */
+const FIXED_CONTROLS: [string, string][] = [
+  ['Left click / drag', 'Select unit or building / box select (Shift adds)'],
+  ['Double click', 'Select all units of that type on screen'],
+  ['Right click', 'Move · attack · get in · set rally point'],
+  ['Ctrl+1–9 / 1–9', 'Assign / recall group (double tap centres camera)'],
+  ['WASD / arrows / screen edge / middle drag', 'Pan camera'],
+  ['Mouse wheel', 'Zoom'],
+  ['- / =', 'Game speed 0.5× – 3×'],
+  ['Shift + click (placing)', 'Place several buildings (walls)'],
+  ['Esc', 'Cancel placement / command / selection'],
+];
+
+/** Rebindable hotkeys: click a key, then press the new key (Esc cancels). */
+function KeybindTable() {
+  const { settings, updateSettings } = useApp();
+  const [waiting, setWaiting] = useState<HotkeyAction | null>(null);
+  const [note, setNote] = useState('');
+  useEffect(() => {
+    if (!waiting) return;
+    const onKey = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.code === 'Escape') {
+        setWaiting(null);
+        return;
+      }
+      const next = rebind(settings.keybinds, waiting, e.code);
+      if (!next) {
+        setNote(`${keyLabel(e.code)} is reserved (camera, groups, speed or menu).`);
+        return;
+      }
+      setNote('');
+      updateSettings({ keybinds: next });
+      setWaiting(null);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [waiting, settings.keybinds, updateSettings]);
+  return (
+    <div>
+      <table className="w-full text-xs" data-testid="keybinds">
+        <tbody>
+          {HOTKEY_ACTIONS.map((a) => (
+            <tr key={a} className="border-t border-graphite-800">
+              <td className="py-1 pr-3">
+                <button
+                  className={`btn min-w-[72px] px-2 py-0.5 font-mono text-xs ${waiting === a ? 'border-warn-500 text-warn-400' : 'text-warn-400'}`}
+                  data-action={a}
+                  onClick={() => setWaiting(waiting === a ? null : a)}
+                >
+                  {waiting === a ? 'press a key…' : keyLabel(settings.keybinds[a])}
+                </button>
+              </td>
+              <td className="text-gray-300">{ACTION_LABELS[a]}</td>
+            </tr>
+          ))}
+          {FIXED_CONTROLS.map(([k, v]) => (
+            <tr key={k} className="border-t border-graphite-800">
+              <td className="py-1 pr-3 font-mono text-gray-400">{k}</td>
+              <td className="text-gray-400">{v}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {note && <div className="mt-1 text-xs text-warn-400">{note}</div>}
+      <button
+        className="btn mt-2 px-2 py-0.5 text-xs"
+        onClick={() => updateSettings({ keybinds: { ...DEFAULT_KEYS } })}
+      >
+        Reset keys to defaults
+      </button>
+    </div>
   );
 }
 
@@ -184,7 +289,28 @@ export function SettingsPage() {
           />
           <span className="w-8 tabular-nums text-gray-400">{settings.scrollSpeed.toFixed(1)}</span>
         </label>
+        <label className="flex items-center justify-between">
+          <span>Show FPS counter</span>
+          <input
+            type="checkbox"
+            checked={settings.showFps}
+            onChange={(e) => updateSettings({ showFps: e.target.checked })}
+          />
+        </label>
+        <label className="flex items-center justify-between" title="Fewer particles and no scorch marks">
+          <span>Performance mode (low effects)</span>
+          <input
+            type="checkbox"
+            checked={settings.performanceMode}
+            onChange={(e) => updateSettings({ performanceMode: e.target.checked })}
+          />
+        </label>
         <VolumeSlider />
+        <FullscreenButton />
+        <section>
+          <div className="panel-title mb-1 mt-4">Controls</div>
+          <KeybindTable />
+        </section>
       </div>
     </Shell>
   );

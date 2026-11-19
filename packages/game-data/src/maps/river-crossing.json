@@ -34,12 +34,12 @@
    "name": "shadow-front-terrain",
    "tilewidth": 32,
    "tileheight": 32,
-   "tilecount": 8,
-   "columns": 8,
+   "tilecount": 10,
+   "columns": 10,
    "margin": 0,
    "spacing": 0,
    "image": "terrain-tiles.png",
-   "imagewidth": 256,
+   "imagewidth": 320,
    "imageheight": 32,
    "tiles": [
     {
@@ -119,6 +119,26 @@
        "name": "kind",
        "type": "string",
        "value": "urban"
+      }
+     ]
+    },
+    {
+     "id": 8,
+     "properties": [
+      {
+       "name": "kind",
+       "type": "string",
+       "value": "snow"
+      }
+     ]
+    },
+    {
+     "id": 9,
+     "properties": [
+      {
+       "name": "kind",
+       "type": "string",
+       "value": "forest"
       }
      ]
     }

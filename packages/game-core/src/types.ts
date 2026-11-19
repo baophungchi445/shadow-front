@@ -16,10 +16,19 @@ import type { PathPoint } from './pathfinding';
 
 export type Order =
   | { type: 'idle' }
-  | { type: 'move'; x: number; y: number; attackMove: boolean }
+  | {
+      type: 'move';
+      x: number;
+      y: number;
+      attackMove: boolean;
+      /** Patrol: the other end of the route (the unit turns around on arrival). */
+      patrol?: { x: number; y: number };
+    }
   | { type: 'attack'; target: EntityId }
   | { type: 'hold' }
-  | { type: 'retreat'; x: number; y: number };
+  | { type: 'retreat'; x: number; y: number }
+  /** Walking to a transport / bunker to get in. */
+  | { type: 'board'; carrier: EntityId };
 
 interface EntityBase {
   id: EntityId;
@@ -69,6 +78,11 @@ export interface Unit extends EntityBase {
   moving: boolean;
   stuckTicks: number;
   lastDist: number;
+  /** Veterancy experience (credits worth of enemies destroyed) and rank 0..3. */
+  xp: number;
+  rank: number;
+  /** Infantry carried inside (transports). Passengers are removed from the world while inside. */
+  passengers: Unit[];
 }
 
 export interface Building extends EntityBase {
@@ -94,6 +108,12 @@ export interface Building extends EntityBase {
   research: { id: ResearchId; progress: number } | null;
   /** Auto-repair toggled on by the owner (costs credits per tick). */
   repairing: boolean;
+  /** Infantry garrisoned inside (bunkers). */
+  passengers: Unit[];
+  /** 1, or 2 once upgraded. */
+  level: number;
+  /** Ticks of upgrade work done, or null when not upgrading. */
+  upgrading: number | null;
 }
 
 export type Entity = Unit | Building;
@@ -148,6 +168,18 @@ export interface Player {
   researched: ResearchId[];
   /** Survival wave attacker: has no base, is driven by the wave system (not an AI Commander). */
   raider: boolean;
+}
+
+/** Capture the Flag: one flag per team, standing in front of the team's first HQ. */
+export interface Flag {
+  team: TeamId;
+  homeX: number;
+  homeY: number;
+  x: number;
+  y: number;
+  /** Unit carrying the flag, if any. */
+  carrier: EntityId | null;
+  atHome: boolean;
 }
 
 /** Runtime state of Survival mode. */

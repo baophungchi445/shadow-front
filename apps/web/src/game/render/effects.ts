@@ -51,8 +51,20 @@ export class Effects {
     this.add = scene.add.graphics().setDepth(20001).setBlendMode(Phaser.BlendModes.ADD);
   }
 
+  /** Performance mode: drop most smoke / debris and cap the particle count lower. */
+  lowDetail = false;
+  private skip = 0;
+
   private push(p: Omit<Particle, 'max' | 'img'>): void {
-    if (this.particles.length > 1400) return;
+    if (this.particles.length > (this.lowDetail ? 350 : 1400)) return;
+    if (
+      this.lowDetail &&
+      p.kind !== 'ring' &&
+      p.kind !== 'marker' &&
+      p.kind !== 'flash' &&
+      ++this.skip % 3 !== 0
+    )
+      return;
     let img: Phaser.GameObjects.Image | null = null;
     if (p.kind !== 'ring' && p.kind !== 'marker') {
       const additive = p.kind === 'flash' || p.kind === 'fire' || p.kind === 'spark';

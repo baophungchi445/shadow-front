@@ -1,6 +1,8 @@
-import type { GameController } from '../../game/GameController';
+import { RANK_NAMES, type GameController } from '../../game/GameController';
 import type { BuildOption, HudSnapshot, SelectionInfo } from '../../game/hudModel';
 import { Icon } from '../Icon';
+import { useApp } from '../../stores/appStore';
+import { keyLabel, type HotkeyAction } from '../../game/keybinds';
 
 function Bar({ value, color }: { value: number; color: string }) {
   return (
@@ -32,7 +34,14 @@ export function SelectionPanel({ sel, controller }: { sel: SelectionInfo; contro
             <Icon id={sel.groups[0].type} className="h-10 w-10" />
           </div>
           <div className="min-w-0 flex-1 text-sm">
-            <div className="font-display text-base font-semibold text-gray-100">{sel.single.name}</div>
+            <div className="font-display text-base font-semibold text-gray-100">
+              {sel.single.name}
+              {sel.single.rank > 0 && (
+                <span className="ml-2 text-xs text-warn-400" title="Veterancy: +10% damage and HP per rank">
+                  {'▲'.repeat(sel.single.rank)} {RANK_NAMES[sel.single.rank]}
+                </span>
+              )}
+            </div>
             <div className="mb-1 text-xs text-gray-400">
               {sel.single.owner} · {sel.single.order}
             </div>
@@ -40,6 +49,9 @@ export function SelectionPanel({ sel, controller }: { sel: SelectionInfo; contro
             <div className="mt-0.5 text-xs tabular-nums text-gray-400">
               HP {sel.single.hp}/{sel.single.maxHp} · {sel.single.weapon}
             </div>
+            {sel.single.cargo && (
+              <CargoRow cargo={sel.single.cargo} onUnload={() => controller.unloadSelected()} />
+            )}
             <div className="mt-1 text-[11px] leading-tight text-gray-500">{sel.single.description}</div>
           </div>
         </div>
@@ -77,7 +89,10 @@ export function SelectionPanel({ sel, controller }: { sel: SelectionInfo; contro
             <Icon id={sel.type} className="h-10 w-10" />
           </div>
           <div className="min-w-0 flex-1 text-sm">
-            <div className="font-display text-base font-semibold text-gray-100">{sel.name}</div>
+            <div className="font-display text-base font-semibold text-gray-100">
+              {sel.name}
+              {sel.level > 1 && <span className="ml-2 text-xs text-warn-400">★ Level {sel.level}</span>}
+            </div>
             <div className="mb-1 text-xs text-gray-400">
               {sel.owner}
               {!sel.complete && ` · Constructing ${Math.round(sel.progress * 100)}%`}
@@ -86,6 +101,9 @@ export function SelectionPanel({ sel, controller }: { sel: SelectionInfo; contro
             <div className="mt-0.5 text-xs tabular-nums text-gray-400">
               HP {sel.hp}/{sel.maxHp}
             </div>
+            {sel.cargo && sel.complete && (
+              <CargoRow cargo={sel.cargo} onUnload={() => controller.unloadSelected()} />
+            )}
             <div className="mt-1 text-[11px] leading-tight text-gray-500">{sel.description}</div>
             {sel.own && !sel.complete && (
               <button
@@ -104,8 +122,47 @@ export function SelectionPanel({ sel, controller }: { sel: SelectionInfo; contro
                 {sel.repairing ? '🔧 Repairing… (stop)' : '🔧 Repair'}
               </button>
             )}
+            {sel.upgrade && (
+              <button
+                className="btn ml-1.5 mt-1.5 px-2 py-0.5 text-xs"
+                disabled={sel.upgrade.progress !== null || !sel.upgrade.affordable}
+                title="Level 2: more HP (defenses also more damage, power plants +50% power)"
+                onClick={() => controller.upgradeBuilding(sel.id)}
+              >
+                {sel.upgrade.progress !== null
+                  ? `⬆ Upgrading ${Math.round(sel.upgrade.progress * 100)}%`
+                  : `⬆ Upgrade (${sel.upgrade.cost})`}
+              </button>
+            )}
+            {sel.sellValue !== null && (
+              <button
+                className="btn ml-1.5 mt-1.5 px-2 py-0.5 text-xs"
+                title="Sell: 50% of the price × remaining HP; queued units are refunded"
+                onClick={() => controller.sellBuilding(sel.id)}
+              >
+                $ Sell (+{sel.sellValue})
+              </button>
+            )}
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+/** Passengers inside a transport / bunker with an Unload button. */
+function CargoRow({ cargo, onUnload }: { cargo: { count: number; capacity: number }; onUnload: () => void }) {
+  return (
+    <div className="mt-1 flex items-center gap-2 text-xs" data-testid="cargo">
+      <span className="text-gray-300">
+        👥 {cargo.count}/{cargo.capacity} inside
+      </span>
+      {cargo.count > 0 ? (
+        <button className="btn px-2 py-0.5 text-xs" onClick={onUnload}>
+          Unload <kbd className="ml-1 rounded bg-graphite-950 px-1 text-[10px] text-gray-400">U</kbd>
+        </button>
+      ) : (
+        <span className="text-gray-500">select infantry, right-click here to get in</span>
       )}
     </div>
   );
@@ -121,6 +178,8 @@ export function CommandPanel({
   controller: GameController;
   mode: string;
 }) {
+  const kb = useApp((st) => st.settings.keybinds);
+  const k = (a: HotkeyAction) => keyLabel(kb[a]);
   if (sel.kind === 'building' && sel.own && sel.research.length) {
     return (
       <div className="panel pointer-events-auto flex h-full flex-1 flex-col p-2.5">
@@ -221,13 +280,19 @@ export function CommandPanel({
   const cmds: { label: string; key: string; run: () => void; active?: boolean }[] = [
     {
       label: 'Attack-move',
-      key: 'F',
+      key: k('attackMove'),
       run: () => (controller.commandMode = 'attackMove'),
       active: mode === 'attackMove',
     },
-    { label: 'Stop', key: 'X', run: () => controller.stopSelected() },
-    { label: 'Hold', key: 'G', run: () => controller.holdSelected() },
-    { label: 'Retreat', key: 'R', run: () => controller.retreatSelected() },
+    {
+      label: 'Patrol',
+      key: k('patrol'),
+      run: () => (controller.commandMode = 'patrol'),
+      active: mode === 'patrol',
+    },
+    { label: 'Stop', key: k('stop'), run: () => controller.stopSelected() },
+    { label: 'Hold', key: k('hold'), run: () => controller.holdSelected() },
+    { label: 'Retreat', key: k('retreat'), run: () => controller.retreatSelected() },
   ];
   return (
     <div className="panel pointer-events-auto flex h-full flex-1 flex-col p-2.5">
@@ -245,13 +310,12 @@ export function CommandPanel({
           </button>
         ))}
         <button className="btn" onClick={() => controller.selectAllArmy()}>
-          Select army <kbd className="ml-1 rounded bg-graphite-950 px-1 text-[10px] text-gray-400">Q</kbd>
+          Select army{' '}
+          <kbd className="ml-1 rounded bg-graphite-950 px-1 text-[10px] text-gray-400">{k('selectArmy')}</kbd>
         </button>
       </div>
       <div className="mt-auto text-[11px] leading-snug text-gray-500">
-        Right-click: move / attack · Drag: box select · Double-click: select type · Ctrl+1-9 / 1-9: groups ·
-        WASD / arrows / screen edge / middle-drag: pan · Wheel: zoom · Space: last alert / base · - / =: game
-        speed
+        {`Right-click: move / attack / get in · ${k('patrol')}: patrol · ${k('unload')}: unload · Drag: box select · Double-click: select type · Ctrl+1-9 / 1-9: groups · WASD / arrows / screen edge / middle-drag: pan · Wheel: zoom · ${k('alert')}: last alert / base · - / =: game speed`}
       </div>
     </div>
   );
@@ -268,7 +332,7 @@ export function BuildPanel({
   placing: string | null;
 }) {
   return (
-    <div className="panel pointer-events-auto flex h-full w-[340px] flex-col p-2.5">
+    <div className="panel pointer-events-auto flex h-full w-[430px] flex-col p-2.5">
       <div className="panel-title mb-1.5 flex justify-between">
         <span>Construction</span>
         {placing && (
@@ -277,7 +341,7 @@ export function BuildPanel({
           </span>
         )}
       </div>
-      <div className="grid grid-cols-4 gap-1.5">
+      <div className="grid grid-cols-6 gap-1">
         {build.map((b) => (
           <button
             key={b.type}
@@ -286,7 +350,7 @@ export function BuildPanel({
             onClick={() => controller.beginPlacement(b.type)}
             className={`relative flex flex-col items-center rounded border bg-graphite-800 px-1 pb-0.5 pt-1 text-mil-400 transition-colors hover:border-mil-500 hover:bg-graphite-700 disabled:opacity-40 ${placing === b.type ? 'border-warn-500' : 'border-graphite-600'}`}
           >
-            <Icon id={b.type} className="h-6 w-6" />
+            <Icon id={b.type} className="h-5 w-5" />
             <span className="w-full truncate text-center text-[10px] leading-tight text-gray-200">
               {b.name}
             </span>
@@ -303,7 +367,7 @@ export function BuildPanel({
   );
 }
 
-export function TeamStatus({ hud }: { hud: HudSnapshot }) {
+export function TeamStatus({ hud, controller }: { hud: HudSnapshot; controller?: GameController }) {
   return (
     <div className="mt-1.5 space-y-0.5">
       {hud.players.map((p, i) => (
@@ -319,6 +383,16 @@ export function TeamStatus({ hud }: { hud: HudSnapshot }) {
             {p.name}
             {p.you ? ' (you)' : ''}
           </span>
+          {p.ally && controller && (
+            <button
+              className="pointer-events-auto rounded border border-graphite-600 px-1 text-[10px] text-warn-400 hover:border-warn-500"
+              title="Send 500 credits to this teammate"
+              disabled={hud.credits < 500}
+              onClick={() => controller.sendCredits(p.id, 500)}
+            >
+              +500◆
+            </button>
+          )}
           <span className="ml-auto text-gray-500">{p.raider ? 'Enemy' : `T${p.team + 1}`}</span>
         </div>
       ))}

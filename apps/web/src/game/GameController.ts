@@ -9,13 +9,26 @@ import type {
   UnitTypeId,
 } from '@shadow-front/shared-types';
 import { BUILDABLE, BUILDINGS, RESEARCH, TICK_MS, TICK_RATE, UNITS } from '@shadow-front/game-data';
-import { TutorialTracker, World, type Building, type Entity, type Unit } from '@shadow-front/game-core';
+import {
+  TutorialTracker,
+  World,
+  getMission,
+  missionTracker,
+  type Building,
+  type Entity,
+  type MatchSummary,
+  type ObjectiveTracker,
+  type Unit,
+} from '@shadow-front/game-core';
 import { AICommander } from '@shadow-front/game-ai';
 import { Sfx } from './audio';
 
-export type CommandMode = 'none' | 'attackMove';
+export type CommandMode = 'none' | 'attackMove' | 'patrol';
 
 export const GAME_SPEEDS = [0.5, 1, 2, 3] as const;
+
+/** Veterancy rank names (index = rank). */
+export const RANK_NAMES = ['Recruit', 'Veteran', 'Elite', 'Heroic'] as const;
 
 /** A recent "under attack" location, shown as a minimap ping. */
 export interface AttackAlert {
@@ -31,8 +44,12 @@ export interface MatchResult {
   durationSec: number;
   mapName: string;
   mission: World['mission'];
+  /** Campaign mission id, if this was a campaign mission. */
+  campaignMission: string | null;
   /** Survival only: waves that entered the map / total waves. */
   waves: { reached: number; total: number } | null;
+  /** Facts for the offline profile (campaign completion is filled in by the app store). */
+  summary: Omit<MatchSummary, 'campaignComplete'>;
   players: {
     name: string;
     faction: string;
@@ -99,8 +116,12 @@ export class GameController {
   private accumulator = 0;
   private groups = new Map<number, EntityId[]>();
   private finished = false;
-  /** Guided objectives (tutorial mission only). */
-  readonly tutorial: TutorialTracker | null;
+  /** A unit of ours reached the Heroic rank during this match. */
+  private heroic = false;
+  /** Objectives shown in the HUD (tutorial and campaign missions only). */
+  readonly objectives: ObjectiveTracker | null;
+  /** Title shown above the objectives. */
+  readonly objectivesTitle: string;
 
   constructor(readonly config: MatchConfig) {
     this.world = new World(config);
@@ -114,7 +135,13 @@ export class GameController {
       config.mission === 'tutorial'
         ? []
         : this.world.players.filter((p) => p.isAI && !p.raider).map((p) => new AICommander(this.world, p.id));
-    this.tutorial = config.mission === 'tutorial' ? new TutorialTracker() : null;
+    const mission = getMission(config.campaignMission);
+    this.objectives = mission
+      ? missionTracker(mission)
+      : config.mission === 'tutorial'
+        ? new TutorialTracker()
+        : null;
+    this.objectivesTitle = mission?.title ?? 'Tutorial';
   }
 
   get human() {
@@ -138,19 +165,23 @@ export class GameController {
       steps++;
       this.handleEvents(this.world.drainEvents());
     }
-    if (steps) this.updateTutorial();
+    if (steps) this.updateObjectives();
     return this.accumulator / TICK_MS;
   }
 
-  private updateTutorial(): void {
-    if (!this.tutorial || this.tutorial.finished) return;
-    const done = this.tutorial.update(this.world, this.humanId, {
-      selectedOwnUnits: this.selectedOwnUnits().length,
-    });
+  private updateObjectives(): void {
+    const o = this.objectives;
+    if (!o || o.finished) return;
+    const done = o.update(this.world, this.humanId, { selectedOwnUnits: this.selectedOwnUnits().length });
     if (!done.length) return;
-    const next = this.tutorial.current;
+    const next = o.current;
+    const last = done[done.length - 1].title;
     this.message(
-      next ? `Objective complete: ${done[done.length - 1].title}. Next: ${next.title}` : 'Tutorial complete!',
+      next
+        ? o.ordered
+          ? `Objective complete: ${last}. Next: ${next.title}`
+          : `Objective complete: ${last}`
+        : `${this.objectivesTitle} complete!`,
       'info',
     );
     this.sfx.play('built');
@@ -222,6 +253,61 @@ export class GameController {
           this.sfx.play('alert');
           break;
         }
+        case 'promoted':
+          if (e.player === this.humanId) {
+            if (e.rank >= 3) this.heroic = true;
+            const u = this.world.get(e.id);
+            this.message(
+              `${u?.kind === 'unit' ? u.def.name : 'Unit'} promoted to ${RANK_NAMES[e.rank]}`,
+              'info',
+            );
+            this.sfx.play('produced');
+          }
+          break;
+        case 'flagTaken':
+          if (e.team === this.team) {
+            this.message('Our flag has been taken!', 'alert');
+            this.sfx.play('alert');
+            this.alerts = [
+              ...this.alerts.filter((a) => performance.now() - a.time < 8000).slice(-4),
+              { x: e.x, y: e.y, time: performance.now(), building: true },
+            ];
+          } else if (e.by === this.team) this.message('We have the enemy flag — bring it home!', 'info');
+          break;
+        case 'flagDropped':
+          this.message(
+            e.team === this.team ? 'Our flag was dropped — recover it!' : 'The enemy flag was dropped',
+            'warn',
+          );
+          break;
+        case 'flagReturned':
+          this.message(
+            e.team === this.team ? 'Our flag is back home' : 'The enemy recovered their flag',
+            'info',
+          );
+          break;
+        case 'flagCaptured':
+          if (e.team === this.team) {
+            this.message('Flag captured!', 'info');
+            this.sfx.play('built');
+          } else this.message('The enemy captured our flag!', 'alert');
+          break;
+        case 'creditsSent':
+          if (e.from === this.humanId)
+            this.message(`Sent ${e.amount} credits to ${this.world.players[e.to].name}`);
+          else if (e.to === this.humanId)
+            this.message(`${this.world.players[e.from].name} sent you ${e.amount} credits`, 'info');
+          break;
+        case 'upgraded':
+          if (e.player === this.humanId) {
+            const b = this.world.get(e.id);
+            this.message(`${b?.kind === 'building' ? b.def.name : 'Building'} upgraded to level 2`, 'info');
+            this.sfx.play('built');
+          }
+          break;
+        case 'sold':
+          if (e.player === this.humanId) this.message(`Building sold for ${e.refund} credits`, 'info');
+          break;
         case 'waveSpawned':
           this.message(`Wave ${e.wave}: ${e.count} hostiles entering the area`, 'warn');
           break;
@@ -242,14 +328,41 @@ export class GameController {
   }
 
   result(): MatchResult {
+    const victory = this.world.winningTeam === this.team;
+    const durationSec = Math.floor((this.world.tick * TICK_MS) / 1000);
+    const me = this.human;
+    const rank: Record<string, number> = { easy: 0, normal: 1, hard: 2, insane: 3 };
+    const enemyDifficulty =
+      this.world.players
+        .filter((p) => p.team !== me.team && p.isAI && !p.raider && p.difficulty)
+        .map((p) => p.difficulty!)
+        .sort((a, b) => rank[b] - rank[a])[0] ?? null;
+    const waves = this.world.survival
+      ? { reached: this.world.survival.wave, total: this.world.survival.total }
+      : null;
     return {
-      victory: this.world.winningTeam === this.team,
-      durationSec: Math.floor((this.world.tick * TICK_MS) / 1000),
+      victory,
+      durationSec,
+      summary: {
+        victory,
+        mission: this.world.mission,
+        mapId: this.config.mapId,
+        mapName: this.world.map.name,
+        faction: me.faction,
+        durationSec,
+        kills: me.stats.kills,
+        unitsBuilt: me.stats.unitsBuilt,
+        unitsLost: me.stats.unitsLost,
+        creditsEarned: me.stats.creditsEarned,
+        enemyDifficulty,
+        waves,
+        campaignMission: this.config.campaignMission ?? null,
+        heroic: this.heroic,
+      },
       mapName: this.world.map.name,
       mission: this.world.mission,
-      waves: this.world.survival
-        ? { reached: this.world.survival.wave, total: this.world.survival.total }
-        : null,
+      campaignMission: this.config.campaignMission ?? null,
+      waves,
       players: this.world.players.map((p) => ({
         name: p.name,
         faction: p.faction,
@@ -374,6 +487,38 @@ export class GameController {
   holdSelected(): void {
     const units = this.selectedOwnUnits();
     if (units.length) this.issue({ type: 'hold', player: this.humanId, units: units.map((u) => u.id) });
+  }
+
+  patrolSelected(x: number, y: number): boolean {
+    const units = this.selectedOwnUnits();
+    if (!units.length) return false;
+    return this.issue({ type: 'patrol', player: this.humanId, units: units.map((u) => u.id), x, y });
+  }
+
+  /** Selected infantry get into a friendly transport / bunker. */
+  loadInto(carrier: EntityId): boolean {
+    const units = this.selectedOwnUnits().filter((u) => u.def.category === 'infantry');
+    if (!units.length) return false;
+    return this.issue({ type: 'load', player: this.humanId, units: units.map((u) => u.id), carrier });
+  }
+
+  /** Unloads every selected carrier that has passengers. */
+  unloadSelected(): void {
+    for (const e of this.selected())
+      if (e.owner === this.humanId && e.passengers.length)
+        this.issue({ type: 'unload', player: this.humanId, carrier: e.id });
+  }
+
+  sendCredits(to: PlayerId, amount: number): void {
+    this.issue({ type: 'transfer', player: this.humanId, to, amount });
+  }
+
+  upgradeBuilding(id: EntityId): void {
+    this.issue({ type: 'upgrade', player: this.humanId, building: id });
+  }
+
+  sellBuilding(id: EntityId): void {
+    if (this.issue({ type: 'sell', player: this.humanId, building: id })) this.selection.delete(id);
   }
 
   retreatSelected(): void {

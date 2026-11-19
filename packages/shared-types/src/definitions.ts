@@ -40,6 +40,23 @@ export interface UnitDef {
   requires: BuildingTypeId[];
   hotkey: string;
   description: string;
+  /** Only this faction can produce the unit (faction-specific roster). */
+  faction?: FactionId;
+  /** Unit whose model / icon is reused for rendering (placeholder art). */
+  look?: UnitTypeId;
+  /** Unarmed support: heals / repairs nearby friendlies automatically. */
+  support?: SupportDef;
+  /** Carries infantry (APC, transport helicopter). */
+  transport?: { capacity: number };
+}
+
+export interface SupportDef {
+  /** What it can heal: infantry (medic) or vehicles + buildings (engineer). */
+  heals: 'infantry' | 'mechanical';
+  /** HP restored per second to one target. */
+  rate: number;
+  /** Range in tiles. */
+  range: number;
 }
 
 export interface BuildingDef {
@@ -63,6 +80,10 @@ export interface BuildingDef {
   /** Must be placed touching ore tiles. */
   needsOre?: boolean;
   produces?: boolean;
+  /** Infantry can garrison inside; the weapon only fires while occupied (damage × occupants). */
+  garrison?: { capacity: number };
+  /** Optional level-2 upgrade. */
+  upgrade?: UpgradeDef;
   hotkey: string;
   description: string;
 }
@@ -91,9 +112,35 @@ export interface ResearchDef {
   /** Research time in ticks. */
   time: number;
   description: string;
+  /** Only this faction can research it. */
+  faction?: FactionId;
 }
 
-export type TileKind = 'sand' | 'grass' | 'road' | 'rock' | 'water' | 'urban' | 'ore' | 'concrete';
+/** Level-2 upgrade of a building. */
+export interface UpgradeDef {
+  cost: number;
+  /** Ticks. */
+  time: number;
+  /** Max HP multiplier. */
+  hp: number;
+  /** Weapon damage multiplier. */
+  damage?: number;
+  /** Power output multiplier (power plants). */
+  power?: number;
+}
+
+export type TileKind =
+  | 'sand'
+  | 'grass'
+  | 'road'
+  | 'rock'
+  | 'water'
+  | 'urban'
+  | 'ore'
+  | 'concrete'
+  /** v0.7: walkable snow and impassable forest. */
+  | 'snow'
+  | 'forest';
 
 export interface MapSpawn {
   /** Top-left tile for the Headquarters. */

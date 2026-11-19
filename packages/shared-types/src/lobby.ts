@@ -65,6 +65,8 @@ export interface MatchSlot {
   team: number;
   difficulty?: Difficulty;
   personality?: Personality;
+  /** Army colour (0xRRGGBB); defaults to the faction colour. Ignored if already taken. */
+  color?: number;
 }
 
 export interface SurvivalSettings {
@@ -82,4 +84,10 @@ export interface MatchConfig {
   slots: MatchSlot[];
   /** Required when mission === 'survival'. All slots must be on team 0. */
   survival?: SurvivalSettings;
+  /** Population cap per player (sum of unit supply, queued units included). 0 or missing = unlimited. */
+  unitCap?: number;
+  /** Seed for `mapId: 'random'` (defaults to `seed`). */
+  mapSeed?: number;
+  /** Campaign mission id when this match is a campaign mission (offline). */
+  campaignMission?: string;
 }

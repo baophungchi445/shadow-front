@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseTiledMap, TiledImportError, type TiledMap } from './tiled';
-import { getMap } from './maps';
+import { generateRandomMap, getMap, mapIsPlayable } from './maps';
 
 /** 4×4 map: sand everywhere, water at (1,1), flipped rock gid at (2,2). */
 function tiny(): TiledMap {
@@ -90,5 +90,32 @@ describe('Tiled importer', () => {
     for (let y = 0; y < 64; y++)
       for (let x = 0; x < 64; x++) expect(m.tiles[y * 64 + x]).toBe(m.tiles[(63 - y) * 64 + (63 - x)]);
     expect(m.tiles.filter((t) => t === 'water').length).toBeGreaterThan(120);
+  });
+
+  it('imports Highland Pass: walled plateau with four open passes, 180° symmetric', () => {
+    const m = getMap('highland-pass');
+    expect(m.name).toBe('Highland Pass');
+    expect(m.strategicPoints.map((p) => p.name)).toEqual(['North Pass', 'Town Square', 'South Pass']);
+    for (let y = 0; y < 64; y++)
+      for (let x = 0; x < 64; x++) expect(m.tiles[y * 64 + x]).toBe(m.tiles[(63 - y) * 64 + (63 - x)]);
+    // The plateau wall is rock; each pass (N, S, W, E at radius 14) is walkable.
+    expect(m.tiles[31 * 64 + 31 - 14]).not.toBe('rock');
+    expect(m.tiles[(31 - 14) * 64 + 31]).not.toBe('rock');
+    expect(m.tiles[(31 - 10) * 64 + 31 - 10]).toBe('rock');
+    expect(m.tiles.filter((t) => t === 'ore').length).toBeGreaterThan(40);
+  });
+});
+
+describe('random maps', () => {
+  it('are deterministic per seed, differ between seeds and are always playable', () => {
+    expect(generateRandomMap(42).tiles).toEqual(generateRandomMap(42).tiles);
+    expect(generateRandomMap(42).tiles).not.toEqual(generateRandomMap(43).tiles);
+    for (let seed = 1; seed <= 40; seed++) {
+      const m = generateRandomMap(seed * 101);
+      expect(m.id).toBe('random');
+      expect(mapIsPlayable(m)).toBe(true);
+      expect(m.strategicPoints).toHaveLength(3);
+    }
+    expect(getMap('random', 7)).toBe(getMap('random', 7)); // cached
   });
 });

@@ -16,7 +16,19 @@ export type UnitTypeId =
   | 'heavy-tank'
   | 'mobile-artillery'
   | 'attack-helicopter'
-  | 'recon-drone';
+  | 'recon-drone'
+  // v0.6 support / specialist infantry
+  | 'sniper'
+  | 'medic'
+  | 'engineer'
+  // v0.6 faction-specific units
+  | 'ranger'
+  | 'rocket-launcher'
+  | 'gunship'
+  | 'light-tank'
+  | 'ifv'
+  // v0.7
+  | 'transport-helicopter';
 
 export type BuildingTypeId =
   | 'headquarters'
@@ -27,12 +39,37 @@ export type BuildingTypeId =
   | 'airfield'
   | 'research-center'
   | 'defense-turret'
-  | 'sam-site';
+  | 'sam-site'
+  // v0.6
+  | 'radar-station'
+  | 'wall'
+  | 'missile-launcher'
+  // v0.7
+  | 'bunker';
 
 export type ResearchId =
-  'composite-armor' | 'improved-munitions' | 'advanced-optics' | 'efficient-extraction';
+  | 'composite-armor'
+  | 'improved-munitions'
+  | 'advanced-optics'
+  | 'efficient-extraction'
+  // v0.7 faction technologies
+  | 'combat-medkits'
+  | 'reactive-armor'
+  | 'nano-repair'
+  | 'turbo-engines'
+  | 'fortified-structures';
 
-export type MapId = 'desert-storm' | 'urban-conflict' | 'river-crossing';
+/** `random` maps are generated from `MatchConfig.mapSeed`. */
+export type MapId =
+  | 'desert-storm'
+  | 'urban-conflict'
+  | 'river-crossing'
+  | 'highland-pass'
+  | 'snowfield'
+  | 'forest-warfare'
+  | 'island-conflict'
+  | 'industrial-zone'
+  | 'random';
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'insane';
 export type Personality = 'rush' | 'fortress' | 'eagle' | 'shadow' | 'warlord';
@@ -40,5 +77,7 @@ export type Personality = 'rush' | 'fortress' | 'eagle' | 'shadow' | 'warlord';
  * annihilation / decapitation: skirmish victory conditions.
  * survival: hold out against escalating enemy waves (offline only).
  * tutorial: guided objectives against a passive AI (offline only).
+ * domination: strategic points score over time; the first team to the target score wins.
+ * ctf: capture the flag — bring the enemy flag to your own flag stand; first to the target captures wins.
  */
-export type MissionType = 'annihilation' | 'decapitation' | 'survival' | 'tutorial';
+export type MissionType = 'annihilation' | 'decapitation' | 'survival' | 'tutorial' | 'domination' | 'ctf';

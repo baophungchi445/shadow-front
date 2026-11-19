@@ -3,8 +3,8 @@
 Modern-warfare **real-time strategy** game for the browser — 2.5D isometric, base building, classic Credits + Power
 economy, hybrid combat and a custom AI Commander. Design source of truth: [`docs/MASTER_GAME_DEVELOPMENT.md`](docs/MASTER_GAME_DEVELOPMENT.md).
 
-> Status: **v0.4 prototype** — playable offline: skirmish vs AI (strategic points, research, repair), **Survival** (enemy waves) and a
-> **Tutorial**, on three maps (one imported from Tiled). Current priority is local play; online co-op (Phases 6–7) has a lobby server
+> Status: **v0.7 prototype** — playable offline: skirmish vs AI (strategic points, research, repair), **Survival** (enemy waves) and a
+> **Campaign** of 4 missions (starting with a tutorial), on four maps (two imported from Tiled). Current priority is local play; online co-op (Phases 6–7) has a lobby server
 > foundation only. All battlefield graphics are procedural placeholders, not production art.
 
 ## Requirements
@@ -32,9 +32,12 @@ pnpm check          # all of the above
 
 ## How to play
 
-0. New to RTS? Start with **Tutorial** in the main menu (8 guided objectives).
+0. New to RTS? Open **Campaign** → **Boot Camp** (8 guided objectives); later missions unlock one by one.
 1. **Play** → choose map, mission, faction and 1–3 AI commanders (difficulty + personality, AI allies allowed) → **Deploy**.
    Mission **Survival**: hold out against 5/10/15 escalating waves (choose wave strength; AI allies optional).
+   **Unit limit**: 100 / 150 (default) / 200 / unlimited population per commander.
+   Mission **Domination**: strategic points score 1 point/s, first team to 1500 wins. **Capture the Flag**: bring the enemy flag home 3 times. Map **🎲 Random**: a new seeded map each time.
+   **Profile** (main menu): level, XP, statistics, match history and achievements, saved in the browser.
 2. Build a **Power Plant**, then a **Resource Extractor** next to an ore field, **Barracks**, **War Factory**, …
 3. Select a building to queue units; right-click the map to set its rally point.
 4. Capture **strategic points** (flags) with ground units for extra income and vision; research upgrades at the **Research Center**; repair damaged buildings from the selection panel.
@@ -68,7 +71,7 @@ tools/                  One-off generators (e.g. the initial River Crossing Tile
 assets/                 Asset folders + manifest (production art pending)
 ```
 
-Maps: `packages/game-data/src/maps/river-crossing.json` is a regular [Tiled](https://www.mapeditor.org) map — open it, edit, save, reload the
+Maps: `packages/game-data/src/maps/river-crossing.json` and `highland-pass.json` are regular [Tiled](https://www.mapeditor.org) map — open it, edit, save, reload the
 game. The authoring contract is in [`docs/TECHNICAL_ARCHITECTURE.md`](docs/TECHNICAL_ARCHITECTURE.md#map-pipeline-v04).
 
 See [`docs/TECHNICAL_ARCHITECTURE.md`](docs/TECHNICAL_ARCHITECTURE.md) and [`RESULT.md`](RESULT.md) (work log).

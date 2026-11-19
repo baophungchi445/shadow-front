@@ -8,6 +8,14 @@ Stylized realism, modern military, 2.5D isometric (2:1 diamond, 64×32 px tiles)
 
 The current build renders all battlefield objects **procedurally** with Phaser Graphics (isometric prisms for buildings, hull + turret shapes for vehicles, figures for infantry, rotor discs for helicopters). These are placeholders and **must not be presented as production art**. They exist so gameplay can be developed and the asset loader can later swap them for sprites.
 
+Since v0.3 the shapes are drawn once and cached as textures (`render/texcache.ts`, per type / colour / direction). v0.6 units reuse the
+nearest base model through `UnitDef.look` (e.g. Ranger → infantry, Light Tank → tank hull) with small distinguishing marks (Sniper long rifle,
+Medic white helmet + red cross, Engineer yellow helmet + backpack).
+
+**Audio is also procedural**: sound effects (`game/audio.ts`) and music (`game/music.ts`) are synthesised with Web Audio, so there are no
+audio files and no licensing to track yet. `assets/audio/{sfx,music}` stays empty until real recordings replace them. Unit and commander
+voices are not implemented.
+
 ## 3. Folder & naming convention
 
 ```text

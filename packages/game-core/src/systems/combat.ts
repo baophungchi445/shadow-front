@@ -55,7 +55,11 @@ function fire(world: World, s: Shooter, weapon: WeaponDef, t: Entity): void {
     targetId: t.id,
     homing,
     weapon,
-    damageMul: s.damageMul * world.damageBonus(s.owner),
+    damageMul:
+      s.damageMul *
+      world.damageBonus(s.owner) *
+      world.rankBonus(s) *
+      (s.kind === 'building' && s.def.garrison ? s.passengers.length : 1),
     air: t.kind === 'unit' && t.air,
   });
   s.cooldown = weapon.cooldown;
@@ -85,6 +89,7 @@ function updateUnit(world: World, u: Unit, weapon: WeaponDef): void {
   const order = u.order;
   switch (order.type) {
     case 'retreat':
+    case 'board':
       return;
     case 'move':
       if (!order.attackMove) return;
@@ -143,6 +148,10 @@ function updateUnit(world: World, u: Unit, weapon: WeaponDef): void {
 }
 
 function updateBuilding(world: World, b: Building, weapon: WeaponDef): void {
+  if (b.def.garrison && b.passengers.length === 0) {
+    b.targetId = null;
+    return;
+  }
   let t = validTarget(world, b, weapon, b.targetId);
   if (t && !inWeaponRange(weapon, b.x, b.y, t)) t = null;
   if (!t || (world.tick + b.id) % 10 === 0) t = acquireTarget(world, b, weapon, weapon.range) ?? t;
@@ -188,7 +197,7 @@ export function updateProjectiles(world: World): void {
     }
     p.x = p.tx;
     p.y = p.ty;
-    impact(world, p.owner, p.team, p.weapon, p.damageMul, p.x, p.y, p.targetId);
+    impact(world, p.owner, p.team, p.weapon, p.damageMul, p.x, p.y, p.targetId, p.sourceId);
   }
   world.projectiles = keep;
 }
@@ -202,6 +211,7 @@ function impact(
   x: number,
   y: number,
   targetId: number | null,
+  sourceId: number,
 ): void {
   const splash = weapon.splash ?? 0;
   world.emit({ type: 'hit', x, y, weapon: weapon.type, splash });
@@ -214,12 +224,13 @@ function impact(
     });
     for (const e of victims) {
       const falloff = 1 - 0.5 * Math.min(1, Math.hypot(e.x - x, e.y - y) / (splash + 0.01));
-      world.damage(e, computeDamage(weapon, damageMul, e) * falloff, owner);
+      world.damage(e, computeDamage(weapon, damageMul, e) * falloff, owner, sourceId);
     }
     return;
   }
   const t = world.get(targetId);
   if (!t) return;
   const r = t.kind === 'building' ? Math.max(t.w, t.h) / 2 + 0.5 : t.radius + 0.5;
-  if (Math.hypot(t.x - x, t.y - y) <= r) world.damage(t, computeDamage(weapon, damageMul, t), owner);
+  if (Math.hypot(t.x - x, t.y - y) <= r)
+    world.damage(t, computeDamage(weapon, damageMul, t), owner, sourceId);
 }

@@ -12,6 +12,8 @@ export const TILE_COLORS: Record<TileKind, number> = {
   water: 0x2e6a86,
   urban: 0x4c4f53,
   ore: 0xa98b52,
+  snow: 0xdfe6ea,
+  forest: 0x35512a,
 };
 
 /** Deterministic per-tile hash in [0, 1). */
@@ -164,6 +166,13 @@ export function buildTerrain(scene: Phaser.Scene, world: World): TerrainLayer {
           const b = hash2(tx, ty * 17 + k);
           g.fillRect(cx + (a - 0.5) * 34, cy + (b - 0.5) * 14, 2, 2);
         }
+      } else if (kind === 'snow') {
+        g.fillStyle(0xffffff, 0.55);
+        for (let k = 0; k < 3; k++) {
+          const a = hash2(tx * 5 + k, ty * 7);
+          const b = hash2(tx * 9, ty * 3 + k);
+          g.fillEllipse(cx + (a - 0.5) * 34, cy + (b - 0.5) * 14, 7, 2.5);
+        }
       } else if (kind === 'water') {
         g.lineStyle(1, 0x8fc7de, 0.25);
         const a = hash2(tx, ty);
@@ -195,6 +204,18 @@ export function buildTerrain(scene: Phaser.Scene, world: World): TerrainLayer {
           .image(p.x, p.y, `urban-${hi}-${ci}`)
           .setOrigin(0.5, (16 + hgt) / (32 + hgt + 2))
           .setDepth(p.y);
+      } else if (kind === 'forest') {
+        // Dense woods: one or two trees per tile.
+        scene.add
+          .image(p.x - 6 + hv * 12, p.y, `tree-${Math.floor(hv * 2)}`)
+          .setOrigin(0.5, 44 / 64)
+          .setDepth(p.y);
+        if (hv > 0.45)
+          scene.add
+            .image(p.x + 9 - hv * 6, p.y + 4, `tree-${Math.floor(hash2(tx, ty) * 2)}`)
+            .setOrigin(0.5, 44 / 64)
+            .setScale(0.8)
+            .setDepth(p.y + 4);
       } else if (kind === 'rock') {
         if (urbanMap)
           scene.add

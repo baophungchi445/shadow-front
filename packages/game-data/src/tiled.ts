@@ -62,6 +62,8 @@ const TILE_KINDS: readonly TileKind[] = [
   'rock',
   'water',
   'urban',
+  'snow',
+  'forest',
 ];
 /** Tiled stores flip/rotation flags in the top bits of a gid. */
 const GID_MASK = 0x1fffffff;

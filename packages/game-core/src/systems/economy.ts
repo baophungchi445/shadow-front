@@ -11,7 +11,7 @@ export function updatePower(world: World): void {
   for (const b of world.buildings()) {
     if (!b.complete) continue;
     const p = world.players[b.owner];
-    if (b.def.power > 0) p.powerProduced += b.def.power;
+    if (b.def.power > 0) p.powerProduced += b.def.power * (b.level >= 2 ? (b.def.upgrade?.power ?? 1) : 1);
     else p.powerUsed += -b.def.power;
   }
 }

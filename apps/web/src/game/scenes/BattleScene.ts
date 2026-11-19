@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { BuildingTypeId, EntityId, UnitTypeId } from '@shadow-front/shared-types';
 import { BALANCE, BUILDINGS, RESEARCH, UNITS } from '@shadow-front/game-data';
+import { actionFor, type HotkeyAction } from '../keybinds';
 import { mapScreenBounds, screenToWorld, worldToScreen, type Entity } from '@shadow-front/game-core';
 import type { GameController } from '../GameController';
 import { buildTerrain, type TerrainLayer } from '../render/terrain';
@@ -13,6 +14,8 @@ import { footprint } from '../render/draw';
 export interface SceneSettings {
   edgeScroll: boolean;
   scrollSpeed: number;
+  keybinds: Record<HotkeyAction, string>;
+  performanceMode: boolean;
 }
 
 const MIN_ZOOM = 0.45;
@@ -32,6 +35,8 @@ export class BattleScene extends Phaser.Scene {
   private ground!: Phaser.GameObjects.Graphics;
   private overlay!: Phaser.GameObjects.Graphics;
   private pointViews: { g: Phaser.GameObjects.Graphics; label: Phaser.GameObjects.Text; key: string }[] = [];
+  /** Capture the Flag: one graphics object per flag (stand + flag). */
+  private flagViews: Phaser.GameObjects.Graphics[] = [];
   private projectiles!: Phaser.GameObjects.Graphics;
   private ghost!: Phaser.GameObjects.Graphics;
   private unitViews = new Map<EntityId, UnitView>();
@@ -83,6 +88,8 @@ export class BattleScene extends Phaser.Scene {
         .setDepth(-4500);
       this.pointViews.push({ g, label, key: '' });
     }
+
+    for (let i = 0; i < world.flags.length; i++) this.flagViews.push(this.add.graphics());
 
     const b = mapScreenBounds(world.map.width, world.map.height);
     this.cameras.main.setBounds(b.x - 240, b.y - 160, b.w + 480, b.h + 420);
@@ -165,27 +172,36 @@ export class BattleScene extends Phaser.Scene {
       }
       return;
     }
-    switch (e.code) {
-      case 'KeyF':
+    switch (actionFor(this.settings.keybinds, e.code)) {
+      case 'attackMove':
         if (c.selectedOwnUnits().length) c.commandMode = 'attackMove';
-        break;
-      case 'KeyX':
+        return;
+      case 'patrol':
+        if (c.selectedOwnUnits().length) c.commandMode = 'patrol';
+        return;
+      case 'unload':
+        c.unloadSelected();
+        return;
+      case 'stop':
         c.stopSelected();
-        break;
-      case 'KeyG':
+        return;
+      case 'hold':
         c.holdSelected();
-        break;
-      case 'KeyR':
+        return;
+      case 'retreat':
         c.retreatSelected();
-        break;
-      case 'KeyQ':
-        if (e.ctrlKey || e.shiftKey) break;
-        c.selectAllArmy();
-        break;
-      case 'Space':
+        return;
+      case 'selectArmy':
+        if (!e.ctrlKey && !e.shiftKey) c.selectAllArmy();
+        return;
+      case 'alert':
         e.preventDefault();
         c.jumpToAlertOrBase();
+        return;
+      default:
         break;
+    }
+    switch (e.code) {
       case 'Minus':
       case 'NumpadSubtract':
         c.stepSpeed(-1);
@@ -236,6 +252,13 @@ export class BattleScene extends Phaser.Scene {
       c.commandMode = 'none';
       return;
     }
+    if (c.commandMode === 'patrol') {
+      const w = this.worldAt(p);
+      const wp = this.cameras.main.getWorldPoint(p.x, p.y);
+      if (c.patrolSelected(w.x, w.y)) this.fx.marker(wp.x, wp.y, 0x6fc3ff);
+      c.commandMode = 'none';
+      return;
+    }
     this.dragStart = { x: p.x, y: p.y };
     this.dragging = false;
   }
@@ -279,6 +302,15 @@ export class BattleScene extends Phaser.Scene {
     const c = this.ctrl;
     const target = this.pick(p);
     const wp = this.cameras.main.getWorldPoint(p.x, p.y);
+    if (
+      target &&
+      target.owner === c.humanId &&
+      c.world.capacityOf(target) > 0 &&
+      c.selectedOwnUnits().some((u) => u.def.category === 'infantry')
+    ) {
+      if (c.loadInto(target.id)) this.fx.marker(wp.x, wp.y, 0x6fc3ff);
+      return;
+    }
     if (
       target &&
       target.team !== c.team &&
@@ -381,6 +413,7 @@ export class BattleScene extends Phaser.Scene {
     const now = performance.now();
     const delta = this.lastFrameTime ? now - this.lastFrameTime : 16;
     this.lastFrameTime = now;
+    this.fx.lowDetail = this.settings.performanceMode;
     this.alpha = this.ctrl.update(delta);
     this.updateCamera(delta);
     this.syncViews();
@@ -389,6 +422,7 @@ export class BattleScene extends Phaser.Scene {
     this.drawOverlays();
     this.drawPlacementGhost();
     this.drawControlPoints();
+    this.drawFlags();
     this.fx.update();
     this.fog.update();
     if (this.frame % 30 === 0) this.terrain.updateOre(this.ctrl.world);
@@ -500,7 +534,8 @@ export class BattleScene extends Phaser.Scene {
             e.kind === 'building' ? 'explosionBig' : 'explosion',
             this.audibility(e.x, e.y) * (e.big ? 1 : 0.5),
           );
-          if (e.kind === 'building' || e.big) this.terrain.scorch(e.x, e.y, e.kind === 'building' ? 46 : 18);
+          if (!this.settings.performanceMode && (e.kind === 'building' || e.big))
+            this.terrain.scorch(e.x, e.y, e.kind === 'building' ? 46 : 18);
           break;
         }
       }
@@ -612,10 +647,19 @@ export class BattleScene extends Phaser.Scene {
     for (const v of this.unitViews.values()) {
       const u = v.unit;
       if (!v.visible || u.dead) continue;
+      const top = u.def.category === 'infantry' ? 26 : 22;
+      // Veterancy chevrons (always shown for own and visible units).
+      if (u.rank > 0) {
+        o.fillStyle(u.rank >= 3 ? 0xffd34d : 0xe9c46a, 1);
+        for (let r = 0; r < u.rank; r++) {
+          const cx = v.sx - (u.rank - 1) * 3 + r * 6;
+          const cy = v.sy - v.altitude - top - 7;
+          o.fillTriangle(cx - 2.5, cy + 2, cx + 2.5, cy + 2, cx, cy - 2);
+        }
+      }
       if (!c.selection.has(u.id) && u.hp >= u.maxHp) continue;
       const f = u.hp / u.maxHp;
       const w = 14 + u.radius * 24;
-      const top = u.def.category === 'infantry' ? 26 : 22;
       drawBar(v.sx, v.sy - v.altitude - top, w, f, hpColor(f));
     }
     for (const v of this.buildingViews.values()) {
@@ -654,7 +698,7 @@ export class BattleScene extends Phaser.Scene {
     // Cursor feedback.
     let cursor = 'default';
     if (c.placing) cursor = 'copy';
-    else if (c.commandMode === 'attackMove') cursor = 'crosshair';
+    else if (c.commandMode === 'attackMove' || c.commandMode === 'patrol') cursor = 'crosshair';
     else if (c.selectedOwnUnits().length) {
       if (this.frame % 4 === 0) {
         const t = this.pick(this.input.activePointer);
@@ -704,6 +748,48 @@ export class BattleScene extends Phaser.Scene {
   }
 
   /** Ground ring, flag and capture progress of every strategic point. */
+  /** Flags (public information in CTF): stand at home, flag at its current position (carried or dropped). */
+  private drawFlags(): void {
+    const world = this.ctrl.world;
+    world.flags.forEach((f, i) => {
+      const g = this.flagViews[i];
+      const color = world.players.find((p) => p.team === f.team)?.color ?? 0xffffff;
+      g.clear();
+      const home = worldToScreen(f.homeX, f.homeY);
+      g.setPosition(0, 0);
+      g.setDepth(home.y + 1);
+      // Stand: team-coloured ring on the ground.
+      g.lineStyle(2, color, 0.9);
+      g.strokeEllipse(home.x, home.y, 54, 27);
+      g.fillStyle(color, 0.15);
+      g.fillEllipse(home.x, home.y, 54, 27);
+      const c = f.carrier !== null ? world.get(f.carrier) : undefined;
+      const carrier = c?.kind === 'unit' ? c : undefined;
+      const fx = carrier ? carrier.prevX + (carrier.x - carrier.prevX) * this.alpha : f.x;
+      const fy = carrier ? carrier.prevY + (carrier.y - carrier.prevY) * this.alpha : f.y;
+      const p = worldToScreen(fx, fy);
+      const top = carrier ? 54 : 44;
+      g.lineStyle(2, 0xe8ecef, 1);
+      g.lineBetween(p.x, p.y, p.x, p.y - top);
+      const wav = Math.sin(this.frame * 0.15) * 3;
+      g.fillStyle(color, 1);
+      g.fillPoints(
+        [
+          { x: p.x + 1, y: p.y - top },
+          { x: p.x + 24, y: p.y - top + 5 + wav },
+          { x: p.x + 1, y: p.y - top + 12 },
+        ],
+        true,
+      );
+      if (!f.atHome && !carrier) {
+        // Dropped flag: blinking marker.
+        g.lineStyle(1.5, 0xffd04a, (this.frame >> 4) % 2 ? 1 : 0.3);
+        g.strokeCircle(p.x, p.y - 4, 14);
+      }
+      g.setDepth(Math.max(home.y, p.y) + 2);
+    });
+  }
+
   private drawControlPoints(): void {
     const world = this.ctrl.world;
     const R = BALANCE.pointRadius;

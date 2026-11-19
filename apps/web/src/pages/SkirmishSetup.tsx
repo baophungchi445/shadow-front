@@ -7,7 +7,17 @@ import type {
   MissionType,
   Personality,
 } from '@shadow-front/shared-types';
-import { FACTIONS, FACTION_IDS, MAP_IDS, PERSONALITIES, SURVIVAL, getMap } from '@shadow-front/game-data';
+import {
+  DEFAULT_UNIT_CAP,
+  FACTIONS,
+  FACTION_IDS,
+  MAP_IDS,
+  PERSONALITIES,
+  PLAYER_COLORS,
+  SURVIVAL,
+  UNIT_CAP_OPTIONS,
+  getMap,
+} from '@shadow-front/game-data';
 import { useApp } from '../stores/appStore';
 import { TILE_COLORS } from '../game/render/terrain';
 import { hex } from '../components/Icon';
@@ -16,10 +26,20 @@ const DIFFICULTIES: Difficulty[] = ['easy', 'normal', 'hard', 'insane'];
 const PERSONALITY_IDS = Object.keys(PERSONALITIES) as Personality[];
 
 /** Spawn markers: defenders green; enemies red (in Survival, the unused spawns are wave entry points). */
-function MapPreview({ mapId, slots, survival }: { mapId: MapId; slots: number; survival: boolean }) {
+function MapPreview({
+  mapId,
+  mapSeed,
+  slots,
+  survival,
+}: {
+  mapId: MapId;
+  mapSeed: number;
+  slots: number;
+  survival: boolean;
+}) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
-    const m = getMap(mapId);
+    const m = getMap(mapId, mapSeed);
     const c = ref.current!;
     const ctx = c.getContext('2d')!;
     const tmp = document.createElement('canvas');
@@ -46,7 +66,7 @@ function MapPreview({ mapId, slots, survival }: { mapId: MapId; slots: number; s
       ctx.fillStyle = (survival ? i < slots : i === 0) ? '#9cf06a' : '#e04848';
       ctx.fillRect(s.tx - 1, s.ty - 1, 5, 5);
     });
-  }, [mapId, slots, survival]);
+  }, [mapId, mapSeed, slots, survival]);
   return <canvas ref={ref} width={360} height={180} className="w-full" />;
 }
 
@@ -66,6 +86,10 @@ interface SavedSetup {
   ais: AiSlot[];
   waveDifficulty: Difficulty;
   waves: number;
+  unitCap: number;
+  mapSeed: number;
+  /** Army colour; 0 = faction colour. */
+  color: number;
 }
 
 const SETUP_KEY = 'shadow-front.skirmish';
@@ -78,6 +102,9 @@ const DEFAULT_SETUP: SavedSetup = {
   ais: [{ faction: 'eastern', difficulty: 'normal', personality: 'warlord', team: 1 }],
   waveDifficulty: 'normal',
   waves: SURVIVAL.defaultWaves,
+  unitCap: DEFAULT_UNIT_CAP,
+  mapSeed: 1,
+  color: 0,
 };
 
 /** Last used setup (per browser). Invalid or missing data falls back to defaults. */
@@ -92,6 +119,7 @@ function loadSetup(): SavedSetup {
       Array.isArray(s.ais) &&
       DIFFICULTIES.includes(s.waveDifficulty) &&
       (SURVIVAL.waveOptions as readonly number[]).includes(s.waves) &&
+      (UNIT_CAP_OPTIONS as readonly number[]).includes(s.unitCap) &&
       s.ais.every(
         (a) =>
           FACTION_IDS.includes(a.faction) &&
@@ -113,8 +141,12 @@ function saveSetup(s: SavedSetup): void {
 }
 
 export function SkirmishSetup() {
-  const { go, startMatch } = useApp();
-  const [initial] = useState(loadSetup);
+  const { go, startMatch, profile } = useApp();
+  const [initial] = useState(() => {
+    const s = loadSetup();
+    // The profile nickname is the default commander name.
+    return s.name === DEFAULT_SETUP.name ? { ...s, name: profile.nickname } : s;
+  });
   const [mapId, setMapId] = useState<MapId>(initial.mapId);
   const [mission, setMission] = useState<MissionType>(initial.mission);
   const [credits, setCredits] = useState(initial.credits);
@@ -123,7 +155,10 @@ export function SkirmishSetup() {
   const [ais, setAis] = useState<AiSlot[]>(initial.ais);
   const [waveDifficulty, setWaveDifficulty] = useState<Difficulty>(initial.waveDifficulty);
   const [waves, setWaves] = useState(initial.waves);
-  const map = getMap(mapId);
+  const [unitCap, setUnitCap] = useState(initial.unitCap);
+  const [color, setColor] = useState(Number.isFinite(initial.color) ? initial.color : 0);
+  const [mapSeed, setMapSeed] = useState(Number.isFinite(initial.mapSeed) ? initial.mapSeed : 1);
+  const map = getMap(mapId, mapSeed);
   const survival = mission === 'survival';
   // Survival keeps at least one spawn free as a wave entry point; every AI is an ally.
   const maxAi = map.spawns.length - (survival ? 2 : 1);
@@ -135,7 +170,7 @@ export function SkirmishSetup() {
 
   const start = () => {
     const slots: MatchSlot[] = [
-      { kind: 'human', name: name.trim() || 'Commander', faction, team: 0 },
+      { kind: 'human', name: name.trim() || 'Commander', faction, team: 0, color: color || undefined },
       ...ais.map((a, i) => ({
         kind: 'ai' as const,
         name: `${PERSONALITIES[a.personality].name} ${i + 1}`,
@@ -145,7 +180,19 @@ export function SkirmishSetup() {
         personality: a.personality,
       })),
     ];
-    saveSetup({ mapId, mission, credits, name, faction, ais, waveDifficulty, waves });
+    saveSetup({
+      mapId,
+      mission,
+      credits,
+      name,
+      faction,
+      ais,
+      waveDifficulty,
+      waves,
+      unitCap,
+      mapSeed,
+      color,
+    });
     startMatch({
       mapId,
       mission,
@@ -153,6 +200,8 @@ export function SkirmishSetup() {
       seed: Math.floor(Math.random() * 1e9),
       slots,
       survival: survival ? { difficulty: waveDifficulty, waves } : undefined,
+      unitCap,
+      mapSeed: mapId === 'random' ? mapSeed : undefined,
     });
   };
 
@@ -192,6 +241,26 @@ export function SkirmishSetup() {
                   ))}
                 </select>
                 <span className="field w-20 text-center text-gray-400">Team 1</span>
+              </div>
+              <div className="mt-2 flex items-center gap-1.5" data-testid="army-color">
+                <span className="mr-1 text-xs text-gray-400">Army colour</span>
+                <button
+                  title="Faction colour"
+                  onClick={() => setColor(0)}
+                  className={`h-6 rounded border-2 px-1.5 text-[10px] text-gray-200 ${color === 0 ? 'border-gray-100' : 'border-graphite-600'}`}
+                  style={{ background: hex(FACTIONS[faction].color) }}
+                >
+                  auto
+                </button>
+                {PLAYER_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    title={hex(c)}
+                    onClick={() => setColor(c)}
+                    className={`h-6 w-6 rounded border-2 ${color === c ? 'border-gray-100' : 'border-transparent'}`}
+                    style={{ background: hex(c) }}
+                  />
+                ))}
               </div>
             </section>
 
@@ -292,6 +361,8 @@ export function SkirmishSetup() {
                 >
                   <option value="annihilation">Annihilation — destroy all enemy forces</option>
                   <option value="decapitation">Decapitation — destroy enemy HQ</option>
+                  <option value="ctf">Capture the Flag — bring the enemy flag home, first to 3</option>
+                  <option value="domination">Domination — hold points to score, first to 1500</option>
                   <option value="survival">Survival — hold out against enemy waves</option>
                 </select>
               </div>
@@ -305,6 +376,21 @@ export function SkirmishSetup() {
                   {[3000, 5000, 8000, 12000].map((c) => (
                     <option key={c} value={c}>
                       {c.toLocaleString()}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <div className="panel-title mb-2">Unit limit</div>
+                <select
+                  className="field w-full"
+                  value={unitCap}
+                  title="Population per commander: infantry 1, light vehicles 2, tanks/artillery/helicopters 3, heavy tanks 4"
+                  onChange={(e) => setUnitCap(Number(e.target.value))}
+                >
+                  {UNIT_CAP_OPTIONS.map((c) => (
+                    <option key={c} value={c}>
+                      {c ? `${c} population` : 'Unlimited'}
                     </option>
                   ))}
                 </select>
@@ -359,12 +445,23 @@ export function SkirmishSetup() {
                   className={`btn ${mapId === id ? 'btn-primary' : ''}`}
                   onClick={() => setMapId(id)}
                 >
-                  {getMap(id).name}
+                  {id === 'random' ? '🎲 Random' : getMap(id).name}
                 </button>
               ))}
             </div>
+            {mapId === 'random' && (
+              <div className="flex items-center justify-between text-xs text-gray-400">
+                <span>{map.name}</span>
+                <button
+                  className="btn px-2 py-0.5 text-xs"
+                  onClick={() => setMapSeed(1 + Math.floor(Math.random() * 999999))}
+                >
+                  🎲 New map
+                </button>
+              </div>
+            )}
             <div className="rounded border border-graphite-600 bg-graphite-950 p-2">
-              <MapPreview mapId={mapId} slots={ais.length + 1} survival={survival} />
+              <MapPreview mapId={mapId} mapSeed={mapSeed} slots={ais.length + 1} survival={survival} />
             </div>
             <div className="text-sm text-gray-400">{map.description}</div>
             <div className="text-xs text-gray-500">

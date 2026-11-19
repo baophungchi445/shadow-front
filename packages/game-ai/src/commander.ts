@@ -2,9 +2,11 @@ import type { ArmorClass, BuildingTypeId, PlayerId, UnitTypeId } from '@shadow-f
 import {
   BUILDINGS,
   RESEARCH,
+  RESEARCH_IDS,
   DIFFICULTY,
   PERSONALITIES,
   UNITS,
+  availableTo,
   mulberry32,
   type DifficultyProfile,
   type PersonalityProfile,
@@ -49,6 +51,8 @@ export class AICommander {
   /** Small squad sent to capture a strategic point. */
   private captureIds: number[] = [];
   private captureTarget: number | null = null;
+  /** Capture the Flag raid squad. */
+  private flagRaid: number[] = [];
   /** Set once the personality build order has been completed. */
   private openingDone = false;
   /** Debug/telemetry: last decision made, shown in dev overlay. */
@@ -61,7 +65,7 @@ export class AICommander {
     const p = world.players[playerId];
     this.diff = DIFFICULTY[p.difficulty ?? 'normal'];
     this.pers = PERSONALITIES[p.personality ?? 'warlord'];
-    this.rnd = mulberry32(0x5eed + playerId * 7919);
+    this.rnd = mulberry32((world.seed ^ 0x5eed) + playerId * 7919);
     // Spawn locations are public map knowledge (like reading the map before a match).
     const own = world.map.spawns[p.spawnIndex];
     this.scoutTargets = world.map.spawns
@@ -137,6 +141,14 @@ export class AICommander {
     if (this.seenArmor.air > 3 && this.count('sam-site') < 2) return 'sam-site';
     if (this.count('war-factory') < 1) return 'war-factory';
     if (this.diff.maxProducers >= 3 && this.count('research-center') < 1) return 'research-center';
+    // Defensive personalities add a long-range missile battery once they can.
+    if (
+      this.pers.defenses >= 2 &&
+      this.count('missile-launcher') < 1 &&
+      this.world.hasCompleted(this.playerId, 'research-center')
+    )
+      return 'missile-launcher';
+    if (this.diff.maxProducers >= 3 && this.count('radar-station') < 1) return 'radar-station';
     if (
       this.diff.maxProducers >= 3 &&
       this.count('airfield') < 1 &&
@@ -204,7 +216,16 @@ export class AICommander {
   }
 
   private unitScore(type: UnitTypeId): number {
-    let s = this.pers.unitWeights[type] ?? 0.3;
+    const def = UNITS[type];
+    // Faction-specific units are the faction's signature: every personality likes them.
+    let s = this.pers.unitWeights[type] ?? (def.faction ? 2 : 0.3);
+    if (def.transport && !def.weapon) return -1;
+    if (def.support) {
+      // At most a couple of medics / engineers, and only once there is an army to support.
+      const have = this.world.playerUnits(this.playerId).filter((u) => u.type === type).length;
+      if (have >= 2 || this.army().length < 6) return -1;
+      return this.rnd() < 0.15 ? 100 : -1; // occasionally, so they never crowd out combat units
+    }
     if (this.diff.counters) {
       const total = Math.max(
         1,
@@ -220,7 +241,7 @@ export class AICommander {
         if (w.canTargetAir) s += air * 4;
       }
     }
-    if (!UNITS[type].weapon) s *= this.scoutId === null && this.known.size === 0 ? 1 : 0.1;
+    if (!def.weapon) s *= this.scoutId === null && this.known.size === 0 ? 1 : 0.1;
     return s * (0.75 + this.rnd() * 0.5);
   }
 
@@ -253,7 +274,10 @@ export class AICommander {
     for (const b of producers) {
       if (b.queue.length >= 2) continue;
       const options = (Object.keys(UNITS) as UnitTypeId[]).filter(
-        (t) => UNITS[t].producedBy === b.type && w.requirementsMet(this.playerId, UNITS[t].requires),
+        (t) =>
+          UNITS[t].producedBy === b.type &&
+          availableTo(t, this.player.faction) &&
+          w.requirementsMet(this.playerId, UNITS[t].requires),
       );
       if (!options.length) continue;
       let best: UnitTypeId | null = null;
@@ -265,7 +289,11 @@ export class AICommander {
           best = t;
         }
       }
-      if (!best) continue;
+      if (!best || bestS < 0) continue;
+      if (w.overCap(this.playerId, best)) {
+        this.lastDecision = 'at unit limit';
+        continue;
+      }
       if (this.player.credits - w.unitCost(this.playerId, best) < this.reserve()) continue;
       const res = w.issue({ type: 'produce', player: this.playerId, producer: b.id, unit: best });
       if (res.ok) this.lastDecision = `produce ${best}`;
@@ -297,6 +325,7 @@ export class AICommander {
     for (const sq of this.squads) for (const id of sq.ids) inSquad.add(id);
     this.captureIds = this.captureIds.filter((id) => w.get(id));
     for (const id of this.captureIds) inSquad.add(id);
+    for (const id of this.flagRaid) inSquad.add(id);
     const home = army.filter((u) => !inSquad.has(u.id));
 
     // 1. Defend: visible enemies close to any of our buildings.
@@ -328,6 +357,9 @@ export class AICommander {
 
     // 2b. Take strategic points (income + vision).
     this.manageCapture(home);
+
+    // 2c. Capture the Flag: raid the enemy flag, bring it home, chase whoever took ours.
+    if (w.flags.length) this.manageFlags(home);
 
     // 3. Maintain attack squads.
     this.squads = this.squads.filter((sq) => {
@@ -399,6 +431,68 @@ export class AICommander {
     }
   }
 
+  /** Flag positions are public (like strategic points); carriers are tracked through the flag state. */
+  private manageFlags(home: Unit[]): void {
+    const w = this.world;
+    const team = this.player.team;
+    const own = w.flags.find((f) => f.team === team);
+    // A unit of ours carries an enemy flag → run home (no fighting on the way).
+    for (const f of w.flags) {
+      if (f.team === team || f.carrier === null || !own) continue;
+      const c = w.get(f.carrier);
+      if (c && c.owner === this.playerId && c.kind === 'unit') {
+        const o = c.order;
+        if (o.type !== 'move' || Math.hypot(o.x - own.homeX, o.y - own.homeY) > 1)
+          w.issue({ type: 'move', player: this.playerId, units: [c.id], x: own.homeX, y: own.homeY });
+      }
+    }
+    // Our flag is away from home → home units go after it.
+    if (own && !own.atHome) {
+      const hunters = home.filter((u) => !u.air && u.order.type !== 'attack').slice(0, 6);
+      if (hunters.length)
+        w.issue({
+          type: 'move',
+          player: this.playerId,
+          units: hunters.map((u) => u.id),
+          x: own.x,
+          y: own.y,
+          attackMove: true,
+        });
+    }
+    // Raid squad: up to 4 ground units go for the nearest enemy flag lying on the ground.
+    this.flagRaid = this.flagRaid.filter((id) => w.get(id));
+    if (this.state === 'opening' || this.state === 'defend') return;
+    const target = w.flags
+      .filter((f) => f.team !== team && f.carrier === null)
+      .sort((a, b) =>
+        own ? Math.hypot(a.x - own.homeX, a.y - own.homeY) - Math.hypot(b.x - own.homeX, b.y - own.homeY) : 0,
+      )[0];
+    if (!target) return;
+    if (this.flagRaid.length < 2) {
+      const ground = home
+        .filter((u) => !u.air && !this.flagRaid.includes(u.id))
+        .sort((a, b) => b.speed - a.speed);
+      if (ground.length >= 4)
+        this.flagRaid.push(...ground.slice(0, 4 - this.flagRaid.length).map((u) => u.id));
+    }
+    const idle = this.flagRaid.filter((id) => {
+      const u = w.get(id) as Unit;
+      return (
+        u.order.type === 'idle' ||
+        (u.order.type === 'move' && Math.hypot(u.order.x - target.x, u.order.y - target.y) > 3)
+      );
+    });
+    if (idle.length)
+      w.issue({
+        type: 'move',
+        player: this.playerId,
+        units: idle,
+        x: target.x,
+        y: target.y,
+        attackMove: true,
+      });
+  }
+
   /**
    * Sends up to three ground units to capture the nearest strategic point not held by our team.
    * Point locations and flags are public map information (visible to every player).
@@ -454,11 +548,25 @@ export class AICommander {
         .playerBuildings(this.playerId)
         .find((b) => b.type === 'research-center' && b.complete && !b.research);
       const busy = new Set(w.playerBuildings(this.playerId).map((b) => b.research?.id));
-      const next = this.pers.researchOrder.find((r) => !w.hasResearch(this.playerId, r) && !busy.has(r));
+      // Personality order first, then the faction's own technology.
+      const order = [
+        ...this.pers.researchOrder,
+        ...RESEARCH_IDS.filter((r) => RESEARCH[r].faction === p.faction),
+      ];
+      const next = order.find((r) => !w.hasResearch(this.playerId, r) && !busy.has(r));
       if (lab && next && p.credits >= RESEARCH[next].cost + 300) {
         if (w.issue({ type: 'research', player: this.playerId, building: lab.id, research: next }).ok)
           this.lastDecision = `research ${next}`;
       }
+    }
+    // Upgrade defenses and power plants when rich (defensive personalities only).
+    if (this.pers.defenses >= 1 && this.state !== 'defend') {
+      const cand = w
+        .playerBuildings(this.playerId)
+        .find((b) => b.complete && b.def.upgrade && b.level < 2 && b.upgrading === null);
+      if (cand && p.credits >= cand.def.upgrade!.cost + 800)
+        if (w.issue({ type: 'upgrade', player: this.playerId, building: cand.id }).ok)
+          this.lastDecision = `upgrade ${cand.type}`;
     }
     if (p.credits < 400) return;
     const enemies = w.visibleEnemies(p.team);

@@ -21,6 +21,8 @@ export class UnitView {
   sx = 0;
   sy = 0;
   readonly altitude: number;
+  /** Model used for rendering (faction units reuse a base model). */
+  readonly look: Unit['type'];
   visible = true;
 
   constructor(
@@ -28,14 +30,15 @@ export class UnitView {
     readonly unit: Unit,
     readonly color: number,
   ) {
-    this.altitude = AIR_ALTITUDE[unit.type] ?? 0;
+    this.look = unit.def.look ?? unit.type;
+    this.altitude = AIR_ALTITUDE[this.look] ?? 0;
     this.infantry = unit.def.category === 'infantry';
     this.body = scene.add.image(0, 0, this.bodyKey(0)).setOrigin(UX / UW, UY / UH);
-    this.top = hasTop(unit.type) ? scene.add.image(0, 0, this.topKey(0)).setOrigin(UX / UW, UY / UH) : null;
+    this.top = hasTop(this.look) ? scene.add.image(0, 0, this.topKey(0)).setOrigin(UX / UW, UY / UH) : null;
   }
 
   private bodyKey(dir: number): string {
-    const { type } = this.unit;
+    const type = this.look;
     const steps = this.infantry ? INFANTRY_DIRS : VEHICLE_DIRS;
     return cachedTexture(this.scene, `ub:${type}:${this.color}:${dir}`, UW, UH, UX, UY, (g) =>
       drawUnitBody(g, type, this.color, dirAngle(dir, steps)),
@@ -43,7 +46,7 @@ export class UnitView {
   }
 
   private topKey(frame: number): string {
-    const { type } = this.unit;
+    const type = this.look;
     const rotor = type === 'attack-helicopter';
     const angle = rotor ? (frame * Math.PI) / ROTOR_FRAMES : dirAngle(frame, VEHICLE_DIRS);
     return cachedTexture(this.scene, `ut:${type}:${this.color}:${frame}`, UW, UH, UX, UY, (g) =>
@@ -74,7 +77,7 @@ export class UnitView {
       .setDepth(depth);
 
     if (this.top) {
-      if (u.type === 'attack-helicopter') {
+      if (this.look === 'attack-helicopter') {
         this.top.setTexture(this.topKey(tick % ROTOR_FRAMES)).setPosition(p.x, p.y);
       } else {
         // Recoil: kick the turret sprite back along the barrel for a few ticks after firing.
@@ -137,7 +140,9 @@ export class BuildingView {
     this.fh = above + below;
     this.ox = this.fw / 2;
     this.oy = above;
-    this.animated = ['headquarters', 'power-plant', 'resource-extractor'].includes(building.type);
+    this.animated = ['headquarters', 'power-plant', 'resource-extractor', 'radar-station'].includes(
+      building.type,
+    );
     this.body = scene.add
       .image(p.x, p.y, this.bodyKey(building.complete ? 'c0' : 'p0'))
       .setOrigin(this.ox / this.fw, this.oy / this.fh)
