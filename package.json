@@ -1,0 +1,31 @@
+{
+  "name": "shadow-front",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "SHADOW FRONT — modern warfare isometric RTS (browser)",
+  "packageManager": "pnpm@9.15.1",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @shadow-front/web dev",
+    "dev:server": "pnpm --filter @shadow-front/server start:dev",
+    "build": "pnpm -r --if-present build",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "lint": "eslint .",
+    "test": "pnpm -r --if-present test",
+    "format": "prettier --write .",
+    "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm build"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.14.0",
+    "eslint": "^9.14.0",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "globals": "^15.12.0",
+    "prettier": "^3.3.3",
+    "typescript": "~5.6.3",
+    "typescript-eslint": "^8.13.0",
+    "vitest": "^2.1.4"
+  }
+}

@@ -1,0 +1,4 @@
+{
+  "$comment": "Registry of production assets (see docs/ART_ASSET_GUIDE.md). v0.1 renders all battlefield objects procedurally (apps/web/src/game/render) — no image assets are shipped yet.",
+  "assets": []
+}
