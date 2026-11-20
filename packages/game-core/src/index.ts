@@ -4,6 +4,7 @@ export * from './pathfinding';
 export * from './fog';
 export * from './combat';
 export * from './world';
+export * from './front';
 export type * from './types';
 export { turnToward } from './systems/movement';
 export * from './tutorial';

@@ -1,4 +1,4 @@
-import type { ArmorClass, UnitTypeId, WeaponType } from '@shadow-front/shared-types';
+import type { ArmorClass, UnitTypeId, Weather, WeaponType } from '@shadow-front/shared-types';
 
 /** Simulation ticks per second. All per-tick values in game-data assume this rate. */
 export const TICK_RATE = 20;
@@ -60,6 +60,49 @@ export const BALANCE = {
   veterancyHp: 0.1,
   /** Heroic (rank 3) units regenerate this fraction of max HP per second. */
   heroicRegen: 0.01,
+  /** Suppression: infantry hit by bullets / artillery gain suppression = damage taken (capped); above the
+   *  threshold they move and fire slower. It decays every tick. */
+  suppressionThreshold: 40,
+  suppressionMax: 120,
+  suppressionDecay: 0.6,
+  suppressedSpeed: 0.55,
+  suppressedFireRate: 0.6,
+  /** Smoke grenades: throw range, cloud radius and lifetime, per-unit cooldown (ticks). Units inside a cloud are
+   *  hidden from enemies that are not within `smokeSpotRange` of them. */
+  smokeRange: 7,
+  smokeRadius: 2.5,
+  smokeTicks: 400,
+  smokeCooldown: 600,
+  smokeSpotRange: 2,
+  /** Critical hits: base chance, extra chance per veterancy rank, damage multiplier. */
+  critChance: 0.08,
+  critPerRank: 0.03,
+  critMultiplier: 1.5,
+  /** Ballistic artillery (v0.11): arc peak = distance × apexRatio (tiles); gunners lead moving targets by their
+   *  current velocity over the flight time; landing scatter grows with distance. */
+  ballisticApexRatio: 0.35,
+  artilleryScatterBase: 0.35,
+  artilleryScatterPerTile: 0.025,
+  /** High ground (v0.12): ground units / buildings standing on a hill tile see further and shoot further; direct
+   *  fire from below at a target on a hill misses this often (artillery and aircraft are unaffected). */
+  hillVision: 2,
+  hillRange: 1,
+  hillMissChance: 0.25,
+  /** Destructible terrain (v0.12): hit points of forest / city tiles against splash weapons (× the weapon's damage
+   *  multiplier against buildings). */
+  forestHp: 260,
+  urbanHp: 700,
+} as const;
+
+/** Per-unit-type upgrade (v0.11), bought at the producing building: every unit of that type, existing and future,
+ *  gains max HP and damage. Cost = unit cost × costRatio (rounded to 50, at least minCost). */
+export const UNIT_UPGRADE = {
+  hp: 1.2,
+  damage: 1.15,
+  /** Ticks. */
+  time: 500,
+  costRatio: 1.5,
+  minCost: 300,
 } as const;
 
 /** Population cost of each unit (population cap). Heavier units take more room. */
@@ -82,8 +125,34 @@ export const UNIT_SUPPLY: Record<UnitTypeId, number> = {
   'light-tank': 2,
   ifv: 3,
   'transport-helicopter': 3,
+  'fighter-jet': 3,
+  bomber: 4,
+  mcv: 4,
+  'missile-system': 4,
 };
 
 /** Population cap options offered in match setup (0 = unlimited) and the default. */
 export const UNIT_CAP_OPTIONS = [100, 150, 200, 0] as const;
 export const DEFAULT_UNIT_CAP = 150;
+
+/** Weather effects (v0.11): vision multiplier for everyone, speed multipliers for ground vehicles / infantry.
+ *  Aircraft are not slowed. */
+export const WEATHER: Record<Weather, { vision: number; vehicleSpeed: number; infantrySpeed: number }> = {
+  clear: { vision: 1, vehicleSpeed: 1, infantrySpeed: 1 },
+  rain: { vision: 0.85, vehicleSpeed: 0.85, infantrySpeed: 1 },
+  sandstorm: { vision: 0.65, vehicleSpeed: 0.95, infantrySpeed: 0.9 },
+  snow: { vision: 0.9, vehicleSpeed: 0.9, infantrySpeed: 0.85 },
+};
+
+export const WEATHER_IDS = Object.keys(WEATHER) as Weather[];
+
+/** Day / night: vision at full night, and the cycle (ticks): day, dusk, night, dawn. */
+export const DAY_NIGHT = {
+  nightVision: 0.7,
+  dayTicks: 20 * 60 * 5,
+  duskTicks: 20 * 30,
+  nightTicks: 20 * 60 * 2,
+  dawnTicks: 20 * 30,
+  /** Vision radius never drops below this (tiles). */
+  minVision: 2.5,
+} as const;

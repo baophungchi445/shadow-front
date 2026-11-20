@@ -3,8 +3,8 @@
 Modern-warfare **real-time strategy** game for the browser — 2.5D isometric, base building, classic Credits + Power
 economy, hybrid combat and a custom AI Commander. Design source of truth: [`docs/MASTER_GAME_DEVELOPMENT.md`](docs/MASTER_GAME_DEVELOPMENT.md).
 
-> Status: **v0.7 prototype** — playable offline: skirmish vs AI (strategic points, research, repair), **Survival** (enemy waves) and a
-> **Campaign** of 4 missions (starting with a tutorial), on four maps (two imported from Tiled). Current priority is local play; online co-op (Phases 6–7) has a lobby server
+> Status: **v0.12 prototype** (English / Tiếng Việt, with a map editor) — playable offline: skirmish vs AI (strategic points, research, repair, transports, formations),
+> **Survival** (enemy waves), **Domination**, **Capture the Flag** and a **Campaign** of 4 missions (starting with a tutorial), on eight maps plus a random map. Current priority is local play; online co-op (Phases 6–7) has a lobby server
 > foundation only. All battlefield graphics are procedural placeholders, not production art.
 
 ## Requirements
@@ -38,6 +38,8 @@ pnpm check          # all of the above
    **Unit limit**: 100 / 150 (default) / 200 / unlimited population per commander.
    Mission **Domination**: strategic points score 1 point/s, first team to 1500 wins. **Capture the Flag**: bring the enemy flag home 3 times. Map **🎲 Random**: a new seeded map each time.
    **Profile** (main menu): level, XP, statistics, match history and achievements, saved in the browser.
+   **Map editor** (main menu): draw your own map, save it, then pick it under *Custom maps* in the match setup.
+   **Settings → Language**: English or Tiếng Việt.
 2. Build a **Power Plant**, then a **Resource Extractor** next to an ore field, **Barracks**, **War Factory**, …
 3. Select a building to queue units; right-click the map to set its rally point.
 4. Capture **strategic points** (flags) with ground units for extra income and vision; research upgrades at the **Research Center**; repair damaged buildings from the selection panel.
@@ -47,9 +49,12 @@ pnpm check          # all of the above
 | ----------------------------------------- | ------------------------------------------------- |
 | Left click / drag                         | Select unit or building / box select (Shift adds) |
 | Double click                              | Select all units of that type on screen           |
-| Right click                               | Move · attack enemy · set rally point             |
+| Right click                               | Move · attack · get in transport · rally point    |
 | F · X · G · R                             | Attack-move · Stop · Hold position · Retreat      |
 | Q                                         | Select whole army                                 |
+| T · U                                     | Patrol · Unload transport / deploy MCV            |
+| B                                         | Next formation (Spread / Line / Column / Wedge)   |
+| Z, then click                             | Smoke grenade (Rifleman, Ranger, Engineer)        |
 | Ctrl+1-9 / 1-9                            | Assign / recall group (double tap centres camera) |
 | WASD / arrows / screen edge / middle drag | Pan camera                                        |
 | Mouse wheel                               | Zoom                                              |

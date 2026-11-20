@@ -1,4 +1,4 @@
-import { BALANCE, RESEARCH } from '@shadow-front/game-data';
+import { BALANCE, RESEARCH, UNIT_UPGRADE } from '@shadow-front/game-data';
 import type { World } from '../world';
 
 /** Advances technology research (slowed by low power like production). */
@@ -51,6 +51,19 @@ export function updateUpgrades(world: World): void {
       b.hp *= up.hp;
       if (up.damage) b.damageMul *= up.damage;
       world.emit({ type: 'upgraded', id: b.id, player: b.owner });
+    }
+  }
+}
+
+/** Advances unit-type upgrades at producers (slowed by low power). */
+export function updateUnitUpgrades(world: World): void {
+  for (const b of world.buildings()) {
+    if (!b.unitUpgrade || !b.complete) continue;
+    b.unitUpgrade.progress += world.powerFactor(b.owner);
+    if (b.unitUpgrade.progress >= UNIT_UPGRADE.time) {
+      const type = b.unitUpgrade.unit;
+      b.unitUpgrade = null;
+      world.completeUnitUpgrade(b.owner, type);
     }
   }
 }

@@ -8,7 +8,7 @@ Ký hiệu: ✅ đã có · 🟡 có một phần · ⬜ chưa làm (offline đ�
 
 ## 2. Player System
 
-✅ Hồ sơ người chơi **offline** (nickname, level & XP, thống kê, lịch sử trận) · 🟡 Avatar: chọn emblem faction (chưa có ảnh avatar riêng) · 🌐 Đăng ký / đăng nhập / đăng xuất, avatar online, bạn bè, người chơi online, mời, chat
+✅ Hồ sơ người chơi **offline** (nickname, level & XP, thống kê, lịch sử trận) · ✅ Avatar riêng: 8 hình × 8 màu (đợt 12.4) · 🌐 Đăng ký / đăng nhập / đăng xuất, avatar online, bạn bè, người chơi online, mời, chat
 
 ## 3. Game Lobby
 
@@ -20,15 +20,15 @@ Ký hiệu: ✅ đã có · 🟡 có một phần · ⬜ chưa làm (offline đ�
 
 ## 5. Faction System
 
-✅ 5 faction, chọn faction, bonus/điểm yếu cân bằng (modifiers) · ✅ Mỗi faction 1 unit đặc trưng · ✅ Công nghệ riêng từng faction · ⬜ Công trình / vũ khí riêng từng faction
+✅ 5 faction, chọn faction, bonus/điểm yếu cân bằng (modifiers) · ✅ Mỗi faction 1 unit đặc trưng · ✅ Công nghệ riêng từng faction · ✅ Công trình riêng từng faction (đợt 10.2)
 
 ## 6. Map System
 
-✅ Desert Storm, Urban Conflict (+ River Crossing, Highland Pass), chọn map, xem trước, đặt tài nguyên, spawn, điểm chiến lược, chướng ngại, đường, cầu, sông, Fog of War, map tự làm qua Tiled · ✅ Random Map · ✅ Forest Warfare, Snowfield, Island Conflict, Industrial Zone (địa hình rừng, tuyết) · ⬜ map editor trong game, độ cao địa hình, môi trường phá hủy được
+✅ Desert Storm, Urban Conflict (+ River Crossing, Highland Pass), chọn map, xem trước, đặt tài nguyên, spawn, điểm chiến lược, chướng ngại, đường, cầu, sông, Fog of War, map tự làm qua Tiled · ✅ Random Map · ✅ Forest Warfare, Snowfield, Island Conflict, Industrial Zone (địa hình rừng, tuyết) · ✅ map editor trong game (đợt 9.2) · ✅ độ cao địa hình (đồi), môi trường phá hủy được (rừng / nhà) (đợt 12.1–12.2)
 
 ## 7. Base Building
 
-✅ HQ, Power Plant, Barracks, War Factory, Airfield, Research Center, Defense Tower (Turret), SAM Site, Resource Extractor (≈ Refinery), đặt công trình, xây, sửa, phá hủy, điều kiện tiên quyết, điện, hàng chờ sản xuất · ✅ Radar Station, Wall, Missile Launcher, **Sell** · ✅ Bunker (có quân trú, đợt 7.1 — AI chưa dùng) · ✅ nâng cấp công trình Level 2 (đợt 7.2) · ⬜ xoay công trình
+✅ HQ, Power Plant, Barracks, War Factory, Airfield, Research Center, Defense Tower (Turret), SAM Site, Resource Extractor (≈ Refinery), đặt công trình, xây, sửa, phá hủy, điều kiện tiên quyết, điện, hàng chờ sản xuất · ✅ Radar Station, Wall, Missile Launcher, **Sell** · ✅ Bunker (có quân trú, đợt 7.1; AI dùng từ đợt 8.1) · ✅ nâng cấp công trình Level 2 (đợt 7.2) · ✅ xoay công trình (mặt trước, đợt 12.3)
 
 ## 8. Economy
 
@@ -38,16 +38,16 @@ Ký hiệu: ✅ đã có · 🟡 có một phần · ⬜ chưa làm (offline đ�
 
 ✅ Rifleman, Anti-Tank Infantry (≈ Rocket Soldier), MBT, Heavy Tank, APC, Scout (Recon Vehicle), Attack Helicopter, UAV (Recon Drone), Self-Propelled Artillery
 ✅ Sniper, Medic, Engineer · ✅ Special Forces (Ranger), Light Tank, IFV, Gunship, Rocket Launcher/MLRS (unit riêng của faction)
-✅ Transport Helicopter (đợt 7.1 — AI chưa dùng) · ⬜ Mobile Command Vehicle, Fighter Jet, Bomber, Long-range Missile System · ⬜ Hải quân (PLAN ghi "Future")
-**Điều khiển:** ✅ chọn, chọn nhiều, nhóm, phím nhóm, move, attack, attack-move, hold, retreat, focus fire, đội hình rải đều, máu · ✅ **Patrol**, **kinh nghiệm / cấp bậc (veterancy)**, sửa xe (Engineer) · ✅ chở quân (APC 5, Transport Helicopter 6, Bunker 4; chuột phải để lên, phím U để xuống) · ⬜ chọn kiểu đội hình, nâng cấp từng unit
+✅ Transport Helicopter (đợt 7.1; AI thả quân từ đợt 8.1) · ✅ Mobile Command Vehicle (triển khai thành HQ tiền tuyến), Fighter Jet, Bomber (đợt 8.3) · ✅ Long-range Missile System (đợt 9.3) · ⬜ Hải quân (PLAN ghi "Future")
+**Điều khiển:** ✅ chọn, chọn nhiều, nhóm, phím nhóm, move, attack, attack-move, hold, retreat, focus fire, đội hình rải đều, máu · ✅ **Patrol**, **kinh nghiệm / cấp bậc (veterancy)**, sửa xe (Engineer) · ✅ chở quân (APC 5, Transport Helicopter 6, Bunker 4; chuột phải để lên, phím U để xuống) · ✅ chọn kiểu đội hình: rải đều / hàng ngang / hàng dọc / mũi tên (đợt 8.4) · ✅ nâng cấp từng unit (đợt 11.1)
 
 ## 10. Combat
 
-✅ Thời gian thực, tự động/thủ công, chọn mục tiêu, tầm bắn, vũ khí, đạn bay, giáp, tính sát thương, sát thương lan, phòng không, nổ, khói, hiệu ứng phá hủy, thống kê · ⬜ Đường đạn đạn đạo thật, chí mạng, áp chế, lựu đạn khói, cháy
+✅ Thời gian thực, tự động/thủ công, chọn mục tiêu, tầm bắn, vũ khí, đạn bay, giáp, tính sát thương, sát thương lan, phòng không, nổ, khói, hiệu ứng phá hủy, thống kê · ✅ áp chế bộ binh, đạn cháy (đợt 9.3) · ✅ chí mạng, lựu đạn khói (đợt 10.3) · ✅ Đường đạn đạo thật: cung parabol, ngắm đón, vùng đạn rơi (đợt 11.4)
 
 ## 11. AI
 
-✅ Xây căn cứ, quản lý tài nguyên, sản xuất, trinh sát, phòng thủ, tấn công, rút lui, chiếm lãnh thổ, chọn mục tiêu, 4 độ khó, 5 tính cách (Shadow dùng trọng số cân bằng) · 🟡 Phối hợp đội (đồng minh không bàn bạc với nhau) · ✅ AI dùng unit / công trình mới
+✅ Xây căn cứ, quản lý tài nguyên, sản xuất, trinh sát, phòng thủ, tấn công, rút lui, chiếm lãnh thổ, chọn mục tiêu, 4 độ khó, 5 tính cách (Shadow dùng trọng số cân bằng) · ✅ Phối hợp đội: AI đồng minh cùng tấn công, gửi cứu viện (đợt 8.1) · ✅ AI dùng chở quân, Bunker, thả quân bằng trực thăng (đợt 8.1) · ✅ Cân bằng lối Rush (đợt 8.2) · ✅ AI dùng unit / công trình mới
 
 ## 12. Multiplayer — 🌐 toàn bộ (server chỉ có quản lý phòng)
 
@@ -57,15 +57,15 @@ Ký hiệu: ✅ đã có · 🟡 có một phần · ⬜ chưa làm (offline đ�
 
 ## 14. Âm thanh & hiệu ứng
 
-✅ Tiếng vũ khí, nổ, công trình (WebAudio procedural), hiệu ứng nổ/khói, animation đơn giản · ✅ Nhạc nền procedural (menu + trận), âm lượng nhạc / hiệu ứng riêng · 🎨 Giọng nói unit/chỉ huy, âm thanh thật, animation thật · ⬜ Thời tiết, ngày đêm
+✅ Tiếng vũ khí, nổ, công trình (WebAudio procedural), hiệu ứng nổ/khói, animation đơn giản · ✅ Nhạc nền procedural (menu + trận), âm lượng nhạc / hiệu ứng riêng · 🎨 Giọng nói unit/chỉ huy, âm thanh thật, animation thật · ✅ Thời tiết (mưa, bão cát, tuyết), ngày / đêm (đợt 11.3)
 
 ## 15. Progression
 
-✅ Level, XP, thống kê, thành tích (achievements) — **lưu offline** · ✅ Nhiệm vụ ngày/tuần, danh hiệu · ⬜ thành thạo faction/unit · 🌐 Bảng xếp hạng, ranking, phần thưởng online · 🎨 Skin, vật phẩm trang trí
+✅ Level, XP, thống kê, thành tích (achievements) — **lưu offline** · ✅ Nhiệm vụ ngày/tuần, danh hiệu · ✅ thành thạo faction (cấp 0–10, đợt 8.6) · ✅ thành thạo từng unit (đợt 11.2) · 🌐 Bảng xếp hạng, ranking, phần thưởng online · 🎨 Skin, vật phẩm trang trí
 
 ## 16. Settings
 
-✅ Tốc độ camera, cuộn mép màn hình, âm lượng, hiện FPS · ✅ Toàn màn hình, âm lượng nhạc / hiệu ứng · 🟡 Camera zoom (lăn chuột trong trận, chưa có tùy chọn trong Settings) · ✅ Đổi phím tắt (đợt 7.5) · ✅ Chế độ hiệu năng (đợt 7.5) · ⬜ Độ nhạy chuột, chất lượng đồ họa, độ phân giải, ngôn ngữ · 🌐 Mạng
+✅ Tốc độ camera, cuộn mép màn hình, âm lượng, hiện FPS · ✅ Toàn màn hình, âm lượng nhạc / hiệu ứng · ✅ Camera zoom + tốc độ zoom (đợt 8.5) · ✅ Đổi phím tắt (đợt 7.5) · ✅ Chất lượng đồ họa Low / Medium / High (thay chế độ hiệu năng), độ nhạy kéo chuột (đợt 8.5) · ✅ ngôn ngữ: tiếng Việt / tiếng Anh (đợt 9.1) · ⬜ độ phân giải · 🌐 Mạng
 
 ## 17. Admin & Backend — 🌐 toàn bộ (cấu hình cân bằng / unit / map / AI đã nằm trong `packages/game-data`)
 

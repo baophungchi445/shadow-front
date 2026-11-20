@@ -11,6 +11,25 @@ export const SUPPORT_INTERVAL = 10;
  */
 export function updateSupport(world: World): void {
   if (world.tick % SUPPORT_INTERVAL !== 0) return;
+  // Support buildings (Field Hospital, Repair Bay) treat everyone eligible in range at once, while powered.
+  for (const b of world.buildings()) {
+    const s = b.def.support;
+    if (!s || !b.complete || world.isLowPower(b.owner)) continue;
+    let worked = false;
+    world.spatial.query(b.x, b.y, s.range + 3, (e) => {
+      if (e.dead || e.id === b.id || e.team !== b.team || e.hp >= e.maxHp) return;
+      const eligible =
+        s.heals === 'infantry'
+          ? e.kind === 'unit' && e.def.category === 'infantry'
+          : (e.kind === 'unit' && e.def.category !== 'infantry') || (e.kind === 'building' && e.complete);
+      if (!eligible) return;
+      const reach = s.range + Math.max(b.w, b.h) / 2 + (e.kind === 'building' ? Math.max(e.w, e.h) / 2 : 0);
+      if (Math.hypot(e.x - b.x, e.y - b.y) > reach) return;
+      e.hp = Math.min(e.maxHp, e.hp + (s.rate * SUPPORT_INTERVAL) / TICK_RATE);
+      worked = true;
+    });
+    if (worked) b.lastFiredTick = world.tick;
+  }
   for (const u of world.units()) {
     const s = u.def.support;
     if (!s) continue;

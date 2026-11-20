@@ -18,6 +18,8 @@ export interface WeaponDef {
   splash?: number;
   canTargetGround: boolean;
   canTargetAir: boolean;
+  /** Incendiary: targets hit keep burning (damage per second for `seconds`). */
+  burn?: { dps: number; seconds: number };
 }
 
 export interface UnitDef {
@@ -48,6 +50,10 @@ export interface UnitDef {
   support?: SupportDef;
   /** Carries infantry (APC, transport helicopter). */
   transport?: { capacity: number };
+  /** Can deploy into this building where it stands (Mobile Command Vehicle). */
+  deploysTo?: BuildingTypeId;
+  /** Carries smoke grenades (ability, see BALANCE.smoke*). */
+  smoke?: boolean;
 }
 
 export interface SupportDef {
@@ -84,6 +90,10 @@ export interface BuildingDef {
   garrison?: { capacity: number };
   /** Optional level-2 upgrade. */
   upgrade?: UpgradeDef;
+  /** Only this faction can build it. */
+  faction?: FactionId;
+  /** Heals / repairs every eligible friendly in range (while powered). */
+  support?: SupportDef;
   hotkey: string;
   description: string;
 }
@@ -140,7 +150,9 @@ export type TileKind =
   | 'concrete'
   /** v0.7: walkable snow and impassable forest. */
   | 'snow'
-  | 'forest';
+  | 'forest'
+  /** v0.12: walkable high ground (vision / range bonus, harder to hit from below). */
+  | 'hill';
 
 export interface MapSpawn {
   /** Top-left tile for the Headquarters. */

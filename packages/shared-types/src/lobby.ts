@@ -1,4 +1,5 @@
 import type { Difficulty, FactionId, MapId, MissionType, Personality } from './ids';
+import type { MapDef } from './definitions';
 
 export type RoomStatus = 'lobby' | 'loading' | 'in-match' | 'results';
 
@@ -76,6 +77,11 @@ export interface SurvivalSettings {
   waves: number;
 }
 
+/** Match weather (v0.11). */
+export type Weather = 'clear' | 'rain' | 'sandstorm' | 'snow';
+/** Time of day: always day, always night, or a day / night cycle. */
+export type DayTime = 'day' | 'night' | 'cycle';
+
 export interface MatchConfig {
   mapId: MapId;
   mission: MissionType;
@@ -90,4 +96,10 @@ export interface MatchConfig {
   mapSeed?: number;
   /** Campaign mission id when this match is a campaign mission (offline). */
   campaignMission?: string;
+  /** Required when `mapId: 'custom'`: a player-made map (validated by the World). */
+  customMap?: MapDef;
+  /** Weather (missing = clear). */
+  weather?: Weather;
+  /** Time of day (missing = day). */
+  dayTime?: DayTime;
 }

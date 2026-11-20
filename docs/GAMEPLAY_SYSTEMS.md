@@ -135,7 +135,7 @@ Owner toggles repair on a completed, damaged building. A full 0→100% repair ta
   passengers of a destroyed vehicle die with it. Passengers keep counting toward the population cap.
 - HUD: right-click a friendly carrier with infantry selected to board; the panel shows `inside N/M` and an **Unload** button (key **U**).
   A Transport Helicopter only unloads over open ground. Events `boarded` / `unloaded`. Covered by game-core tests.
-- Not done yet: the AI does not use transports or bunkers.
+- Since v0.8 the AI uses APCs, Transport Helicopters (drop raids) and Bunkers (see AI_DESIGN §6g).
 
 ## 5j. v0.7 additions
 
@@ -150,6 +150,74 @@ Owner toggles repair on a completed, damaged building. A full 0→100% repair ta
   returns home when its owner touches it, a capture needs your own flag at home; 3 captures win.
 - **Terrain**: `snow` (walkable), `forest` (blocked). Maps: Snowfield, Forest Warfare, Island Conflict, Industrial Zone (Tiled, mirrored).
 - **Teams**: army colour per slot (`MatchSlot.color`), credit transfers to living teammates (`transfer`).
+
+## 5k. v0.8 additions
+
+- **Fighter Jet** (Airfield, needs Radar Station, 1100): speed 0.24, missile 55 (×1.8 vs air), range 8, **air targets only**.
+- **Bomber** (Airfield, needs Research Center, 1800): 650 HP, bombs 150 damage, splash 1.8, range 1.5 (flies over the target), ground only.
+- **Mobile Command Vehicle** (War Factory, needs Research Center, 2500, unarmed): `deploy` command turns it into a Headquarters centred
+  where it stands, with no distance-to-base rule (`placementError(..., anywhere)`); the HQ starts 60% built and cannot be cancelled
+  (no 2500 → 3000 refund). Event `deployed`. Key: the unload key (default U) or the panel button.
+- **Attack orders** split by weapon: units that cannot hit the target (e.g. tanks vs aircraft) attack-move toward it; the order fails only
+  when nobody can hit it.
+- **Formations** (`move.formation`): `spread` (default, old behaviour), `line` (≤ 8 per rank, across the travel direction), `column`
+  (two abreast), `wedge` (toughest unit at the tip). Non-spread formations cap every member at the slowest member's speed
+  (`order.speed`); slots on blocked tiles fall back to free tiles; a blocked target anchors on the nearest open tile. Air keeps the ring.
+- **Faction mastery** (offline profile): faction XP = match XP earned with that faction; levels 0–10 (300 … 16000 XP);
+  titles Specialist (level 5) and Grandmaster (level 10). Old profiles rebuild mastery from their history.
+- **Settings**: graphics quality Low / Medium / High (particles 350 / 800 / 1400, optional smoke kept 1/3 / 1/2 / all, scorch none /
+  buildings / all, anti-aliasing off on Low — from the next match), zoom speed and drag-pan sensitivity (0.5–2).
+
+## 5l. v0.9 additions
+
+- **Custom maps**: `MatchConfig.mapId: 'custom'` + `customMap: MapDef`; the World refuses a map that fails `customMapErrors`
+  (size 32–96, 2–4 spawns with a free 3×3 non-ore HQ footprint ≥ 1 tile from the edge and ≥ 8 tiles apart, ≤ 8 strategic points on open
+  ground, every base / point reachable on foot, ≥ 5 ore tiles within 12 tiles of each base). Stored compactly (`StoredMap`, one digit
+  per tile) in the browser; the editor offers 180° mirror painting.
+- **Long-range Missile System** (War Factory; Research Center + Radar Station; 2000): artillery missile 150, range 20, min range 6,
+  splash 1.4, incendiary.
+- **Burning** (`WeaponDef.burn`): hit ground units / buildings take `dps` for `seconds` (Missile System 6 × 5 s, MLRS 4 × 4 s);
+  re-ignition refreshes, does not stack; aircraft do not burn.
+- **Suppression**: infantry hit by bullets / artillery gain suppression equal to damage taken (max 120, −0.6 per tick); at ≥ 40 they move at
+  55% speed and reload at 60% rate. Rockets / missiles do not suppress; vehicles are never suppressed.
+
+## 5m. v0.10 additions
+
+- **Faction buildings** (`BuildingDef.faction`, `buildingAvailableTo`; one per faction, refused for other factions):
+  Field Hospital (Western, 900, heals all friendly infantry within 6 tiles by 5 HP/s), Howitzer Emplacement (Eastern, 1400, artillery 90,
+  range 13, min 3, splash 1.6), Repair Bay (Pacific, 900, repairs vehicles / aircraft / buildings within 5 tiles by 12 HP/s), Oil Derrick
+  (Desert, 1200, +4 credits/s without ore), Bastion (Iron, 1600, 5200 HP, shell 70, range 8). Support buildings work only while powered.
+- **Smoke grenades** (`UnitDef.smoke`, command `smoke`): range 7, radius 2.5, 20 s, 30 s cooldown per unit. Ground units inside a cloud are
+  invisible to a team unless one of its units is within 2 tiles (`World.isVisibleTo`), so they cannot be targeted.
+- **Critical hits**: rolled on firing with the match RNG: 8% + 3% per veterancy rank, damage × 1.5 (event `crit`).
+
+## 5n. v0.11 additions
+
+- **Unit upgrades** (commands `upgradeUnit` / `cancelUnitUpgrade`, `UNIT_UPGRADE`): at the producing building, one unit type at a time
+  per building, 500 ticks (power-scaled), cost `max(300, round50(1.5 × unit cost))`. Effect for every unit of that type of the player —
+  existing, carried and future: max HP × 1.2, damage × 1.15. Selling refunds a running upgrade; a destroyed building loses it.
+- **Unit mastery** (`PlayerStats.byUnit`, `Profile.unitMastery`): per unit type, units produced and enemies destroyed. Points = built +
+  2 × kills; levels at 10 / 30 / 75 / 150 / 300. Title *Weapons Expert* at level 5.
+- **Weather / time of day** (`MatchConfig.weather`, `dayTime`; `WEATHER`, `DAY_NIGHT`): vision × (rain 0.85, sandstorm 0.65, snow 0.9) ×
+  (night 0.7; the cycle is 5 min day, 30 s dusk, 2 min night, 30 s dawn), never below 2.5 tiles; applies to fog of war and target
+  scanning. Ground speed: rain vehicles × 0.85; sandstorm vehicles × 0.95, infantry × 0.9; snow vehicles × 0.9, infantry × 0.85.
+  Aircraft are not slowed. Formation speed caps include weather.
+- **Ballistic artillery**: `artillery` shells fly at constant horizontal speed with a parabolic height (`Projectile.apex` = 0.35 ×
+  distance; bombs from aircraft have apex 0). Gunners lead moving units by their current velocity × flight time (`leadPoint`, two
+  refinement passes); scatter ± (0.35 + 0.025 × distance) tiles per axis. The client marks the landing zone while the shell is in the air.
+
+## 5o. v0.12 additions
+
+- **High ground** (`TileKind 'hill'`, walkable): ground units / buildings on a hill get +2 vision (`BALANCE.hillVision`) and +1 weapon
+  range (`hillRange`, `World.rangeBonus`). Direct (homing) fire from lower ground at a target on a hill misses 25% of the time
+  (`hillMissChance`: the round lands just beside the target). Artillery and aircraft are unaffected. Desert Storm has two mirrored hills;
+  random maps get 1–2 (own RNG stream). Custom maps store tile index ≥ 10 as letters (`a` = hill), older maps unchanged.
+- **Destructible terrain** (`World.damageTerrain`, event `terrainDestroyed`): splash impacts damage forest (260) and urban (700) tiles by
+  `damage × multiplier × DAMAGE_TABLE[type].building`, falling off to 50% at the edge. Destroyed forest → grass, urban → concrete (both
+  walkable); the nav grid version bumps so paths are recomputed. Each World owns a copy of the map tiles.
+- **Building facing** (`Building.facing` 0..3 = +y, +x, −y, −x; `build.facing`; `frontOf`): units leave through the front edge and the
+  default rally point is in front. The client rotates the placement with the Retreat key; the AI faces producers toward the map centre.
+- **Avatar** (`Profile.avatar`): one of 8 glyphs (`AVATAR_ICONS`) on one of 8 colours (`AVATAR_COLORS`).
 
 ## 6. Fog of War
 

@@ -61,3 +61,50 @@ HUD clicks not reaching the battlefield, pause stopping the simulation, surrende
 - Browser: `round7` suite (27 checks): key rebinding (reserved key rejected, in-game effect, panel label), performance mode, challenges & titles,
   four new maps load, CTF HUD and flag alert, army colour, credit transfer, APC boarding by right-click and unloading with U, turret upgrade,
   Bunker in build menu, faction-only research, CTF victory with XP.
+
+## v0.8 additions
+
+- game-ai: `tactics.test.ts` — bunker garrison (keeps 4 mobile infantry), APC boarding + unloading in an attack, allies joining a posted
+  attack, transport-helicopter drop raid.
+- game-core: MCV deploy (far from base, cannot cancel, build around it; invalid unit / blocked ground / wrong owner), Fighter Jet (air only),
+  Bomber splash, formations (shapes, shared speed, tank at the wedge tip, spread unchanged), faction mastery (levels, per-faction gain,
+  titles, migration from history).
+- Balance: headless AI-vs-AI matrix (Rush vs others, 48 matches) recorded in RESULT.md 8.2.
+- Browser: `round8` suite (18 checks): v0.7 performance-mode migration to Low quality, quality / zoom / pan settings saved, formation hotkey
+  listed, mastery panel and locked Specialist title, formation row + B hotkey + right-click Line move at the slowest speed, Wedge button,
+  Fighter / Bomber / MCV in production menus, MCV deploy via panel, attack on a helicopter (jet attacks, tank attack-moves), fighter kill,
+  victory with mastery on results and in Profile. `round7` updated for the quality selector.
+
+## v0.9 additions
+
+- game-data: custom map encoding and validation (spawns, ore, reachability, sizes, damaged data).
+- game-core: matches on a custom map (bases on the map's spawns, invalid maps refused), burning, suppression, Missile System stats.
+- Balance: Rush matrix re-run after suppression (15/48 Rush wins, 7–26 min).
+- Browser: `round9` suite (20 checks): language switch (settings, menu, setup, HUD, translated simulation message, pause menu, back to
+  English), map editor (validation messages, mirrored spawns, ore / water / point tools, save, preselected in setup), custom-map match with
+  the camera on the base, Missile System in the factory menu, suppressed status, burning damage.
+
+## v0.10 additions
+
+- game-core: faction buildings (one per faction, other factions refused, hospital heals infantry only, repair bay, derrick income,
+  howitzer range), smoke (range, cooldown, expiry, hiding from distant enemies), critical-hit rate.
+- game-ai: forward base with a Mobile Command Vehicle and extractors.
+- Browser: `round10` suite (14 checks): Vietnamese codex / campaign / profile / selection panel / names inside messages, Western build
+  menu shows only its faction building, Field Hospital healing, smoke via Z + click with cooldown display, Desert Oil Derrick.
+
+## v0.11 additions
+
+- game-core: unit upgrades (cost, effect on existing / carried / new units only of that type, refusals, cancel refund), unit mastery
+  (levels, accumulation, level-ups, title, sanitizing, per-type counting in the simulation), weather / day-night (defaults, vision with
+  floor, fog, cycle phases, speed per unit class), ballistic artillery (lead point, apex, bomb drop, hitting a crossing tank).
+- game-ai: upgrades its most numerous unit type when it has spare credits.
+- Browser: `round11` suite (15 checks): empty unit mastery, weather / time selectors, rain + night match and top-bar indicator, Barracks
+  upgrades row (start, pay, complete, message, star), artillery arc, unit mastery on results and Profile, setup remembered, Vietnamese labels.
+
+## v0.12 additions
+
+- game-core: high ground (hill storage, hills on Desert Storm / random maps, vision / range bonus, ~25% misses from below), destructible
+  terrain (forest → grass, urban → concrete, walkable, shared map untouched, splash only), building facing (front point per facing,
+  stored by `build`, units leave through the front), avatar (default, valid / damaged data).
+- Browser: `round12` suite (11 checks): avatar picker, menu badge, saved avatar, editor hill brush, hill bonuses on Desert Storm, rotate with
+  R while placing (hint, facing, rally side), R still retreats otherwise, artillery burning a wood to walkable grass, Vietnamese label.

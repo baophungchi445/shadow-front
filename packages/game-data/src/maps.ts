@@ -54,6 +54,16 @@ class MapBuilder {
       this.rect(x - half, y - half, thickness, thickness, kind);
     }
   }
+  /** High ground (v0.12): turns open ground (not ore, roads, concrete or obstacles) inside a noisy disc into hill. */
+  hill(cx: number, cy: number, r: number, rnd: () => number): void {
+    const R = Math.ceil(r + 1);
+    for (let j = -R; j <= R; j++)
+      for (let i = -R; i <= R; i++) {
+        const k = this.get(cx + i, cy + j);
+        if (!k || TILE_BLOCKED[k] || k === 'ore' || k === 'road' || k === 'concrete') continue;
+        if (Math.hypot(i, j) <= r + (rnd() - 0.5) * 0.6) this.set(cx + i, cy + j, 'hill');
+      }
+  }
   clearCircle(cx: number, cy: number, r: number, kind: TileKind): void {
     for (let j = -r; j <= r; j++)
       for (let i = -r; i <= r; i++) if (i * i + j * j <= r * r) this.set(cx + i, cy + j, kind);
@@ -103,6 +113,10 @@ function buildDesertStorm(): MapDef {
   }
   // Concrete pads under HQs.
   for (const s of SPAWNS) b.rect(s.tx - 1, s.ty - 1, 5, 5, 'concrete');
+  // High ground overlooking the centre (v0.12), mirrored.
+  const hills = mulberry32(4242);
+  b.hill(23, 31, 2.6, hills);
+  b.hill(41, 33, 2.6, hills);
 
   // Ore: one field next to each base, contested fields in the middle and edges.
   const homeOre = [
@@ -275,6 +289,10 @@ function randomCandidate(seed: number): MapDef {
   for (let k = 0, n = ri(2, 3); k < n; k++)
     b.blob(ri(8, 56), ri(16, 28), 1.6 + rnd() * 0.6, 'ore', rnd, 0.25);
   for (const s of SPAWNS) b.rect(s.tx - 1, s.ty - 1, 5, 5, 'concrete');
+  // High ground (v0.12): its own random stream so older seeds keep their layout otherwise.
+  const hr = mulberry32(seed ^ 0x5f3759df);
+  for (let k = 0, n = 1 + Math.floor(hr() * 2); k < n; k++)
+    b.hill(14 + Math.floor(hr() * 37), 16 + Math.floor(hr() * 12), 1.8 + hr() * 1.2, hr);
 
   for (let y = SIZE / 2; y < SIZE; y++)
     for (let x = 0; x < SIZE; x++) b.tiles[y * SIZE + x] = b.tiles[(SIZE - 1 - y) * SIZE + (SIZE - 1 - x)];
@@ -318,7 +336,7 @@ export function generateRandomMap(seed: number): MapDef {
 const randomCache = new Map<number, MapDef>();
 
 const cache = new Map<MapId, MapDef>();
-const builders: Record<MapId, () => MapDef> = {
+const builders: Record<Exclude<MapId, 'custom'>, () => MapDef> = {
   random: () => generateRandomMap(1),
   'desert-storm': buildDesertStorm,
   'urban-conflict': buildUrbanConflict,
@@ -332,6 +350,7 @@ const builders: Record<MapId, () => MapDef> = {
 
 /** Map by id. For `random`, `mapSeed` selects the generated map. */
 export function getMap(id: MapId, mapSeed?: number): MapDef {
+  if (id === 'custom') throw new Error('Custom maps are passed in MatchConfig.customMap');
   if (id === 'random' && mapSeed !== undefined) {
     let r = randomCache.get(mapSeed);
     if (!r) {
@@ -348,7 +367,7 @@ export function getMap(id: MapId, mapSeed?: number): MapDef {
   return m;
 }
 
-export const MAP_IDS = Object.keys(builders) as MapId[];
+export const MAP_IDS = Object.keys(builders) as Exclude<MapId, 'custom'>[];
 
 export const TILE_BLOCKED: Record<TileKind, boolean> = {
   sand: false,
@@ -361,4 +380,5 @@ export const TILE_BLOCKED: Record<TileKind, boolean> = {
   urban: true,
   snow: false,
   forest: true,
+  hill: false,
 };

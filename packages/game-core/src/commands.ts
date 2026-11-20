@@ -6,11 +6,22 @@ import {
   RESEARCH,
   UNITS,
   availableTo,
+  buildingAvailableTo,
   researchAvailableTo,
+  unitUpgradeCost,
 } from '@shadow-front/game-data';
 import type { World } from './world';
+import { canTarget } from './combat';
 import type { Building, Unit } from './types';
-import { orderMove, orderAttack, orderStop, orderHold, orderPatrol, pathTo } from './systems/movement';
+import {
+  orderMove,
+  orderAttack,
+  orderStop,
+  orderHold,
+  orderPatrol,
+  orderFormation,
+  pathTo,
+} from './systems/movement';
 
 const ok: CommandResult = { ok: true };
 const fail = (reason: string): CommandResult => ({ ok: false, reason });
@@ -37,7 +48,9 @@ export function executeCommand(world: World, cmd: Command): CommandResult {
       const units = ownedUnits(world, cmd.player, cmd.units);
       if (!units.length) return fail('No units');
       if (!Number.isFinite(cmd.x) || !Number.isFinite(cmd.y)) return fail('Bad target');
-      orderMove(world, units, cmd.x, cmd.y, cmd.attackMove ?? false);
+      if (cmd.formation && cmd.formation !== 'spread' && units.length > 1)
+        orderFormation(world, units, cmd.x, cmd.y, cmd.attackMove ?? false, cmd.formation);
+      else orderMove(world, units, cmd.x, cmd.y, cmd.attackMove ?? false);
       return ok;
     }
     case 'attack': {
@@ -48,7 +61,12 @@ export function executeCommand(world: World, cmd: Command): CommandResult {
       const team = world.players[cmd.player].team;
       if (!world.areEnemies(team, target.team)) return fail('Cannot attack allies');
       if (!world.isVisibleTo(team, target)) return fail('Target not visible');
-      orderAttack(world, units, target);
+      // Units whose weapon cannot hit this target (e.g. tanks vs aircraft) attack-move toward it instead.
+      const able = units.filter((u) => canTarget(u.def.weapon!, target));
+      if (!able.length) return fail('Selected units cannot attack that target');
+      orderAttack(world, able, target);
+      const rest = units.filter((u) => !able.includes(u));
+      if (rest.length) orderMove(world, rest, target.x, target.y, true);
       return ok;
     }
     case 'stop': {
@@ -72,6 +90,8 @@ export function executeCommand(world: World, cmd: Command): CommandResult {
       if (!BUILDABLE.includes(cmd.building)) return fail('Not buildable');
       const def = BUILDINGS[cmd.building];
       const p = world.players[cmd.player];
+      if (!buildingAvailableTo(cmd.building, p.faction))
+        return fail(`${def.name} is not available to your faction`);
       if (!Number.isInteger(cmd.tx) || !Number.isInteger(cmd.ty)) return fail('Bad position');
       if (!world.requirementsMet(cmd.player, def.requires)) return fail('Requirements not met');
       if (p.credits < def.cost) return fail('Insufficient credits');
@@ -79,7 +99,7 @@ export function executeCommand(world: World, cmd: Command): CommandResult {
       if (err) return fail(err);
       p.credits -= def.cost;
       p.stats.creditsSpent += def.cost;
-      world.createBuilding(cmd.player, cmd.building, cmd.tx, cmd.ty, false);
+      world.createBuilding(cmd.player, cmd.building, cmd.tx, cmd.ty, false, cmd.facing ?? 0);
       return ok;
     }
     case 'patrol': {
@@ -117,6 +137,25 @@ export function executeCommand(world: World, cmd: Command): CommandResult {
       world.unloadAll(carrier);
       return ok;
     }
+    case 'smoke': {
+      if (!Number.isFinite(cmd.x) || !Number.isFinite(cmd.y)) return fail('Bad target');
+      const grenadiers = ownedUnits(world, cmd.player, cmd.units).filter((u) => u.def.smoke);
+      if (!grenadiers.length) return fail('No selected unit carries smoke grenades');
+      const ready = grenadiers
+        .filter((u) => world.tick >= u.smokeReadyTick)
+        .sort((a, b) => Math.hypot(a.x - cmd.x, a.y - cmd.y) - Math.hypot(b.x - cmd.x, b.y - cmd.y));
+      if (!ready.length) return fail('Smoke grenade not ready');
+      const err = world.throwSmoke(ready[0], cmd.x, cmd.y);
+      return err ? fail(err) : ok;
+    }
+    case 'deploy': {
+      const u = world.get(cmd.unit);
+      if (!u || u.kind !== 'unit' || u.owner !== cmd.player) return fail('Invalid unit');
+      if (!u.def.deploysTo) return fail(`${u.def.name} cannot deploy`);
+      if (u.air) return fail('Cannot deploy in the air');
+      const r = world.deploy(u);
+      return typeof r === 'string' ? fail(r) : ok;
+    }
     case 'transfer': {
       const from = world.players[cmd.player];
       const to = world.players[cmd.to];
@@ -146,6 +185,33 @@ export function executeCommand(world: World, cmd: Command): CommandResult {
       b.upgrading = 0;
       return ok;
     }
+    case 'upgradeUnit': {
+      const b = ownedBuilding(world, cmd.player, cmd.building);
+      const def = UNITS[cmd.unit];
+      if (!b || !def || def.producedBy !== b.type) return fail('This building does not train that unit');
+      if (!b.complete) return fail('Building under construction');
+      const p = world.players[cmd.player];
+      if (!availableTo(cmd.unit, p.faction)) return fail(`${def.name} is not available to your faction`);
+      if (world.hasUnitUpgrade(cmd.player, cmd.unit)) return fail('Already upgraded');
+      if (b.unitUpgrade) return fail('Upgrade in progress');
+      if (world.playerBuildings(cmd.player).some((o) => o.unitUpgrade?.unit === cmd.unit))
+        return fail('Already in progress');
+      const cost = unitUpgradeCost(cmd.unit);
+      if (p.credits < cost) return fail('Insufficient credits');
+      p.credits -= cost;
+      p.stats.creditsSpent += cost;
+      b.unitUpgrade = { unit: cmd.unit, progress: 0 };
+      return ok;
+    }
+    case 'cancelUnitUpgrade': {
+      const b = ownedBuilding(world, cmd.player, cmd.building);
+      if (!b || !b.unitUpgrade) return fail('Nothing to cancel');
+      const cost = unitUpgradeCost(b.unitUpgrade.unit);
+      world.players[cmd.player].credits += cost;
+      world.players[cmd.player].stats.creditsSpent -= cost;
+      b.unitUpgrade = null;
+      return ok;
+    }
     case 'sell': {
       const b = ownedBuilding(world, cmd.player, cmd.building);
       if (!b) return fail('Invalid building');
@@ -157,6 +223,7 @@ export function executeCommand(world: World, cmd: Command): CommandResult {
       for (const u of b.queue) refund += world.unitCost(cmd.player, u);
       if (b.research) refund += RESEARCH[b.research.id].cost;
       if (b.upgrading !== null) refund += b.def.upgrade?.cost ?? 0;
+      if (b.unitUpgrade) refund += unitUpgradeCost(b.unitUpgrade.unit);
       p.credits += refund;
       world.unloadAll(b);
       world.removeBuilding(b);
@@ -166,6 +233,8 @@ export function executeCommand(world: World, cmd: Command): CommandResult {
     case 'cancelBuild': {
       const b = ownedBuilding(world, cmd.player, cmd.building);
       if (!b || b.complete) return fail('Nothing to cancel');
+      // A deploying Headquarters was paid for as a vehicle: it cannot be cancelled for the building price.
+      if (b.type === 'headquarters') return fail('A deploying Headquarters cannot be cancelled');
       world.players[cmd.player].credits += Math.round(b.def.cost * BALANCE.buildingCancelRefund);
       world.players[cmd.player].stats.creditsSpent -= b.def.cost;
       world.removeBuilding(b);

@@ -1,6 +1,16 @@
 /** Rebindable in-game hotkeys (KeyboardEvent.code values). */
 export type HotkeyAction =
-  'attackMove' | 'patrol' | 'unload' | 'stop' | 'hold' | 'retreat' | 'selectArmy' | 'alert' | 'pause';
+  | 'attackMove'
+  | 'patrol'
+  | 'unload'
+  | 'stop'
+  | 'hold'
+  | 'retreat'
+  | 'selectArmy'
+  | 'formation'
+  | 'smoke'
+  | 'alert'
+  | 'pause';
 
 export const HOTKEY_ACTIONS: HotkeyAction[] = [
   'attackMove',
@@ -9,6 +19,8 @@ export const HOTKEY_ACTIONS: HotkeyAction[] = [
   'hold',
   'retreat',
   'selectArmy',
+  'formation',
+  'smoke',
   'unload',
   'alert',
   'pause',
@@ -22,6 +34,8 @@ export const DEFAULT_KEYS: Record<HotkeyAction, string> = {
   hold: 'KeyG',
   retreat: 'KeyR',
   selectArmy: 'KeyQ',
+  formation: 'KeyB',
+  smoke: 'KeyZ',
   alert: 'Space',
   pause: 'KeyP',
 };
@@ -29,11 +43,13 @@ export const DEFAULT_KEYS: Record<HotkeyAction, string> = {
 export const ACTION_LABELS: Record<HotkeyAction, string> = {
   attackMove: 'Attack-move (then click)',
   patrol: 'Patrol (then click)',
-  unload: 'Unload transports / bunkers',
+  unload: 'Unload transports / bunkers, deploy MCV',
   stop: 'Stop',
   hold: 'Hold position',
   retreat: 'Retreat',
   selectArmy: 'Select whole army',
+  formation: 'Next formation (spread / line / column / wedge)',
+  smoke: 'Smoke grenade (then click)',
   alert: 'Jump to latest alert, then base',
   pause: 'Pause menu (F10 always works)',
 };

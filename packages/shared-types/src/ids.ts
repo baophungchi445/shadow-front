@@ -28,7 +28,13 @@ export type UnitTypeId =
   | 'light-tank'
   | 'ifv'
   // v0.7
-  | 'transport-helicopter';
+  | 'transport-helicopter'
+  // v0.8
+  | 'fighter-jet'
+  | 'bomber'
+  | 'mcv'
+  // v0.9
+  | 'missile-system';
 
 export type BuildingTypeId =
   | 'headquarters'
@@ -45,7 +51,13 @@ export type BuildingTypeId =
   | 'wall'
   | 'missile-launcher'
   // v0.7
-  | 'bunker';
+  | 'bunker'
+  // v0.10 faction buildings
+  | 'field-hospital'
+  | 'howitzer'
+  | 'repair-bay'
+  | 'oil-derrick'
+  | 'bastion';
 
 export type ResearchId =
   | 'composite-armor'
@@ -69,7 +81,9 @@ export type MapId =
   | 'forest-warfare'
   | 'island-conflict'
   | 'industrial-zone'
-  | 'random';
+  | 'random'
+  /** Player-made map passed in MatchConfig.customMap. */
+  | 'custom';
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'insane';
 export type Personality = 'rush' | 'fortress' | 'eagle' | 'shadow' | 'warlord';

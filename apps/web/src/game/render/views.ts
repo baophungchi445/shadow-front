@@ -146,6 +146,7 @@ export class BuildingView {
     this.body = scene.add
       .image(p.x, p.y, this.bodyKey(building.complete ? 'c0' : 'p0'))
       .setOrigin(this.ox / this.fw, this.oy / this.fh)
+      .setFlipX(building.facing % 2 === 1)
       .setDepth(p.y);
     this.head = building.def.weapon
       ? scene.add

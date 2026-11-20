@@ -93,7 +93,48 @@ MVP implements RUSH, FORTRESS, EAGLE, WARLORD (SHADOW falls back to balanced wei
 - Researches its faction technology after the personality order; defensive personalities upgrade defenses / power plants when rich (cost + 800).
 - Capture the Flag: a 4-unit raid squad (fastest ground units) goes for the enemy flag (public position), carriers run home without fighting,
   home units chase whoever took our flag.
-- Not yet: the AI does not use transports or bunkers and never builds Transport Helicopters.
+- Transports and bunkers: see §6g (v0.8).
+
+## 6g. v0.8 — transports, coordination, rush balance
+
+- **APC mounting**: when an attack is launched, infantry within 12 tiles board the squad's APCs (the APCs wait up to 6 s, stragglers are
+  released); loaded APCs unload when within 7 tiles of the target or of a visible enemy. Squad members riding inside are kept in the squad.
+- **Drop raids** (Eagle / Shadow / Warlord, Normal+): one Transport Helicopter is produced once the army has ≥ 8 units; it loads 6 home
+  infantry, flies to the nearest remembered enemy extractor / power plant, lands 3 tiles short, unloads (or earlier below 40% HP) and returns;
+  the dropped troops become an attack squad.
+- **Bunkers** (personalities with ≥ 2 defenses): one Bunker after the War Factory; the cheapest home infantry garrison it, but at least
+  4 infantry always stay mobile.
+- **Team coordination** through per-world team boards (no shared knowledge beyond the team's fog): an attack posts its target; allies with
+  ≥ 50% of their own threshold join within 15 s. A base attacked by ≥ 3 enemies posts a help call; allies within 50 tiles send half of
+  their idle home army (at most every 30 s).
+- **Standing army** (rush balance): from minute 2 an AI whose army value is below `attackValue × clamp(tick / 9000, 0.35, 0.8)` or below
+  80% of the largest enemy army it has seen (decaying estimate) only builds economy / production / defense, does not research or upgrade and
+  keeps no reserve. Capture squads need ≥ 6 ground units at home (4 in Survival).
+- **Rush** (`economyCap: 1`): one extractor and one strategic point; first attack at ≥ 0.75 × the difficulty's first-attack time; pre-attack
+  army capped at 1.25 × threshold. Simulation (Rush vs the 4 other personalities × 3 maps × Normal/Hard × both sides = 48 matches):
+  Rush wins 46 → 17, matches 8–23 min.
+- **New units**: Fighter Jets only after enemy aircraft were seen; Eagle and Warlord build Bombers. The AI does not use the MCV.
+
+## 6h. v0.10
+
+- Builds its faction building after the War Factory (Desert Corps: two Oil Derricks).
+- **Armor answer** (all difficulties): when the enemies attacking its base are armored, rockets / shells score up to +4 and rifles −2.
+  (Found by the Survival regression test: a Normal AI kept training Rangers against a lone Heavy Tank and never finished the match.)
+- **Smoke**: an attack squad with ≥ 2 wounded infantry within 9 tiles of a visible enemy defense throws smoke on them (every 15 s).
+- **Forward base** (Hard / Insane, not Rush, after minute 10, ≥ 2 extractors, not under-defended): saves for and builds one Mobile
+  Command Vehicle, drives it to the nearest unclaimed ore ≥ 20 tiles from home and ≥ 16 from known enemy buildings, deploys it, then saves
+  for two extractors around the new HQ. Simulations: 4/4 matches opened a forward base (minutes 18–24) with 1–2 extractors.
+
+## 6i. v0.11
+
+- **Unit upgrades** (Normal and above, not while defending or under-defended): upgrades the armed unit type it has most of (≥ 4) when it
+  has the upgrade cost + 600 spare, one at a time.
+- Weather and darkness affect the AI exactly like the player (it only sees what its units see).
+
+## 6j. v0.12
+
+- Producers are built facing the map centre so units leave toward the front.
+- High ground and destructible terrain apply to the AI like to the player; the AI does not yet seek hills on purpose.
 
 ## 7. Acceptance criteria
 

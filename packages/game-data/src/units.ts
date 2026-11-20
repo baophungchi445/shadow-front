@@ -1,4 +1,5 @@
 import type { FactionId, UnitDef, UnitTypeId } from '@shadow-front/shared-types';
+import { UNIT_UPGRADE } from './balance';
 
 /** Base unit roster. Faction modifiers are applied at spawn time by game-core. */
 export const UNITS: Record<UnitTypeId, UnitDef> = {
@@ -26,6 +27,7 @@ export const UNITS: Record<UnitTypeId, UnitDef> = {
     requires: [],
     hotkey: 'Q',
     description: 'Cheap infantry. Strong vs infantry, weak vs armor.',
+    smoke: true,
   },
   'at-soldier': {
     id: 'at-soldier',
@@ -284,6 +286,7 @@ export const UNITS: Record<UnitTypeId, UnitDef> = {
     requires: [],
     hotkey: 'T',
     description: 'Unarmed. Repairs nearby vehicles and buildings for free.',
+    smoke: true,
   },
 
   // ---------------------------------------------------------------- v0.6 faction units
@@ -311,6 +314,7 @@ export const UNITS: Record<UnitTypeId, UnitDef> = {
     requires: ['war-factory'],
     hotkey: 'Y',
     description: 'Western Alliance only. Elite, fast infantry with heavy rifles.',
+    smoke: true,
     faction: 'western',
     look: 'rifleman',
   },
@@ -335,11 +339,12 @@ export const UNITS: Record<UnitTypeId, UnitDef> = {
       splash: 2.2,
       canTargetGround: true,
       canTargetAir: false,
+      burn: { dps: 4, seconds: 4 },
     },
     producedBy: 'war-factory',
     requires: ['research-center'],
     hotkey: 'Y',
-    description: 'Eastern Legion only. Saturation rocket artillery with a wide blast.',
+    description: 'Eastern Legion only. Saturation rocket artillery with a wide, incendiary blast.',
     faction: 'eastern',
     look: 'mobile-artillery',
   },
@@ -445,6 +450,111 @@ export const UNITS: Record<UnitTypeId, UnitDef> = {
     description: 'Unarmed. Flies 6 infantry over any terrain; unload anywhere on open ground.',
     look: 'attack-helicopter',
   },
+
+  // ---------------------------------------------------------------- v0.8
+  'fighter-jet': {
+    id: 'fighter-jet',
+    name: 'Fighter Jet',
+    category: 'air',
+    armor: 'air',
+    cost: 1100,
+    buildTime: 260,
+    hp: 380,
+    speed: 0.24,
+    vision: 10,
+    radius: 0.45,
+    weapon: {
+      type: 'missile',
+      damage: 55,
+      range: 8,
+      cooldown: 35,
+      projectileSpeed: 0.9,
+      canTargetGround: false,
+      canTargetAir: true,
+    },
+    producedBy: 'airfield',
+    requires: ['radar-station'],
+    hotkey: 'R',
+    description:
+      'Very fast air-superiority jet. Hunts helicopters, drones and bombers; cannot attack the ground.',
+  },
+  bomber: {
+    id: 'bomber',
+    name: 'Bomber',
+    category: 'air',
+    armor: 'air',
+    cost: 1800,
+    buildTime: 380,
+    hp: 650,
+    speed: 0.12,
+    vision: 8,
+    radius: 0.6,
+    weapon: {
+      type: 'artillery',
+      damage: 150,
+      range: 1.5,
+      cooldown: 90,
+      projectileSpeed: 0.3,
+      splash: 1.8,
+      canTargetGround: true,
+      canTargetAir: false,
+    },
+    producedBy: 'airfield',
+    requires: ['research-center'],
+    hotkey: 'T',
+    description:
+      'Heavy bomber: flies over the target and drops a devastating bomb load. Needs fighter or SAM cover.',
+  },
+  mcv: {
+    id: 'mcv',
+    name: 'Mobile Command Vehicle',
+    category: 'armored',
+    armor: 'heavy',
+    cost: 2500,
+    buildTime: 400,
+    hp: 900,
+    speed: 0.05,
+    vision: 9,
+    radius: 0.55,
+    weapon: null,
+    producedBy: 'war-factory',
+    requires: ['research-center'],
+    hotkey: 'U',
+    description: 'Unarmed. Deploys into a Headquarters where it stands (U) to start a forward base anywhere.',
+    deploysTo: 'headquarters',
+  },
+
+  // ---------------------------------------------------------------- v0.9
+  'missile-system': {
+    id: 'missile-system',
+    name: 'Long-range Missile System',
+    category: 'artillery',
+    armor: 'light',
+    cost: 2000,
+    buildTime: 420,
+    hp: 360,
+    speed: 0.05,
+    vision: 8,
+    radius: 0.5,
+    weapon: {
+      type: 'artillery',
+      damage: 150,
+      range: 20,
+      minRange: 6,
+      cooldown: 170,
+      projectileSpeed: 0.55,
+      splash: 1.4,
+      canTargetGround: true,
+      canTargetAir: false,
+      burn: { dps: 6, seconds: 5 },
+    },
+    producedBy: 'war-factory',
+    requires: ['research-center', 'radar-station'],
+    hotkey: 'I',
+    description:
+      'Strikes ground targets 20 tiles away with incendiary missiles. Needs spotters (radar, scouts) to see that far; helpless up close.',
+    look: 'mobile-artillery',
+  },
 };
 
 export const UNIT_IDS = Object.keys(UNITS) as UnitTypeId[];
@@ -453,4 +563,9 @@ export const UNIT_IDS = Object.keys(UNITS) as UnitTypeId[];
 export function availableTo(unit: UnitTypeId, faction: FactionId): boolean {
   const f = UNITS[unit].faction;
   return !f || f === faction;
+}
+
+/** Credits needed to upgrade a unit type (see UNIT_UPGRADE). */
+export function unitUpgradeCost(type: UnitTypeId): number {
+  return Math.max(UNIT_UPGRADE.minCost, Math.round((UNITS[type].cost * UNIT_UPGRADE.costRatio) / 50) * 50);
 }

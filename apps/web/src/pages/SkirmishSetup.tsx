@@ -1,7 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
+  DayTime,
+  Weather,
   Difficulty,
   FactionId,
+  MapDef,
   MapId,
   MatchSlot,
   MissionType,
@@ -16,30 +19,24 @@ import {
   PLAYER_COLORS,
   SURVIVAL,
   UNIT_CAP_OPTIONS,
+  WEATHER_IDS,
+  customMapErrors,
   getMap,
+  toMapDef,
 } from '@shadow-front/game-data';
+import { loadCustomMaps } from '../game/customMaps';
 import { useApp } from '../stores/appStore';
 import { TILE_COLORS } from '../game/render/terrain';
 import { hex } from '../components/Icon';
+import { useT } from '../i18n';
 
 const DIFFICULTIES: Difficulty[] = ['easy', 'normal', 'hard', 'insane'];
 const PERSONALITY_IDS = Object.keys(PERSONALITIES) as Personality[];
 
 /** Spawn markers: defenders green; enemies red (in Survival, the unused spawns are wave entry points). */
-function MapPreview({
-  mapId,
-  mapSeed,
-  slots,
-  survival,
-}: {
-  mapId: MapId;
-  mapSeed: number;
-  slots: number;
-  survival: boolean;
-}) {
+function MapPreview({ map: m, slots, survival }: { map: MapDef; slots: number; survival: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
-    const m = getMap(mapId, mapSeed);
     const c = ref.current!;
     const ctx = c.getContext('2d')!;
     const tmp = document.createElement('canvas');
@@ -66,7 +63,7 @@ function MapPreview({
       ctx.fillStyle = (survival ? i < slots : i === 0) ? '#9cf06a' : '#e04848';
       ctx.fillRect(s.tx - 1, s.ty - 1, 5, 5);
     });
-  }, [mapId, mapSeed, slots, survival]);
+  }, [m, slots, survival]);
   return <canvas ref={ref} width={360} height={180} className="w-full" />;
 }
 
@@ -90,7 +87,24 @@ interface SavedSetup {
   mapSeed: number;
   /** Army colour; 0 = faction colour. */
   color: number;
+  /** Name of the custom map when mapId === 'custom'. */
+  customName?: string;
+  weather: Weather;
+  dayTime: DayTime;
 }
+
+const DAY_TIMES: DayTime[] = ['day', 'night', 'cycle'];
+const WEATHER_LABEL: Record<Weather, string> = {
+  clear: 'Clear',
+  rain: 'Rain — vision −15%, vehicles −15% speed',
+  sandstorm: 'Sandstorm — vision −35%, everyone slightly slower',
+  snow: 'Snow — vision −10%, infantry −15%, vehicles −10% speed',
+};
+const DAY_TIME_LABEL: Record<DayTime, string> = {
+  day: 'Day',
+  night: 'Night — vision −30%',
+  cycle: 'Day / night cycle (5 min day, 2 min night)',
+};
 
 const SETUP_KEY = 'shadow-front.skirmish';
 const DEFAULT_SETUP: SavedSetup = {
@@ -105,6 +119,8 @@ const DEFAULT_SETUP: SavedSetup = {
   unitCap: DEFAULT_UNIT_CAP,
   mapSeed: 1,
   color: 0,
+  weather: 'clear',
+  dayTime: 'day',
 };
 
 /** Last used setup (per browser). Invalid or missing data falls back to defaults. */
@@ -114,7 +130,8 @@ function loadSetup(): SavedSetup {
     if (!raw) return DEFAULT_SETUP;
     const s = { ...DEFAULT_SETUP, ...(JSON.parse(raw) as Partial<SavedSetup>) };
     const ok =
-      MAP_IDS.includes(s.mapId) &&
+      (MAP_IDS.includes(s.mapId as (typeof MAP_IDS)[number]) ||
+        (s.mapId === 'custom' && loadCustomMaps().some((m) => m.name === s.customName))) &&
       FACTION_IDS.includes(s.faction) &&
       Array.isArray(s.ais) &&
       DIFFICULTIES.includes(s.waveDifficulty) &&
@@ -126,6 +143,8 @@ function loadSetup(): SavedSetup {
           DIFFICULTIES.includes(a.difficulty) &&
           PERSONALITY_IDS.includes(a.personality),
       );
+    if (!WEATHER_IDS.includes(s.weather)) s.weather = 'clear';
+    if (!DAY_TIMES.includes(s.dayTime)) s.dayTime = 'day';
     return ok ? s : DEFAULT_SETUP;
   } catch {
     return DEFAULT_SETUP;
@@ -142,6 +161,7 @@ function saveSetup(s: SavedSetup): void {
 
 export function SkirmishSetup() {
   const { go, startMatch, profile } = useApp();
+  const t = useT();
   const [initial] = useState(() => {
     const s = loadSetup();
     // The profile nickname is the default commander name.
@@ -158,7 +178,18 @@ export function SkirmishSetup() {
   const [unitCap, setUnitCap] = useState(initial.unitCap);
   const [color, setColor] = useState(Number.isFinite(initial.color) ? initial.color : 0);
   const [mapSeed, setMapSeed] = useState(Number.isFinite(initial.mapSeed) ? initial.mapSeed : 1);
-  const map = getMap(mapId, mapSeed);
+  const [customMaps] = useState(loadCustomMaps);
+  const [customName, setCustomName] = useState(initial.customName ?? '');
+  const [weather, setWeather] = useState<Weather>(initial.weather);
+  const [dayTime, setDayTime] = useState<DayTime>(initial.dayTime);
+  const stored = customMaps.find((m) => m.name === customName);
+  const map = useMemo(
+    () =>
+      mapId === 'custom' && stored
+        ? toMapDef(stored)
+        : getMap(mapId === 'custom' ? 'desert-storm' : mapId, mapSeed),
+    [mapId, stored, mapSeed],
+  );
   const survival = mission === 'survival';
   // Survival keeps at least one spawn free as a wave entry point; every AI is an ally.
   const maxAi = map.spawns.length - (survival ? 2 : 1);
@@ -192,6 +223,9 @@ export function SkirmishSetup() {
       unitCap,
       mapSeed,
       color,
+      customName: mapId === 'custom' ? customName : undefined,
+      weather,
+      dayTime,
     });
     startMatch({
       mapId,
@@ -202,6 +236,9 @@ export function SkirmishSetup() {
       survival: survival ? { difficulty: waveDifficulty, waves } : undefined,
       unitCap,
       mapSeed: mapId === 'random' ? mapSeed : undefined,
+      customMap: mapId === 'custom' ? map : undefined,
+      weather,
+      dayTime,
     });
   };
 
@@ -210,18 +247,20 @@ export function SkirmishSetup() {
       <div className="panel flex max-h-full w-[1120px] max-w-full flex-col overflow-auto p-6">
         <div className="mb-5 flex items-baseline justify-between">
           <div>
-            <div className="panel-title">Skirmish</div>
-            <h2 className="font-display text-3xl font-bold tracking-widest text-gray-100">Match Setup</h2>
+            <div className="panel-title">{t('Skirmish')}</div>
+            <h2 className="font-display text-3xl font-bold tracking-widest text-gray-100">
+              {t('Match Setup')}
+            </h2>
           </div>
           <button className="btn" onClick={() => go('menu')}>
-            ◀ Back
+            {t('◀ Back')}
           </button>
         </div>
 
         <div className="grid grid-cols-[minmax(0,1fr)_380px] gap-6">
           <div className="flex flex-col gap-5">
             <section>
-              <div className="panel-title mb-2">You</div>
+              <div className="panel-title mb-2">{t('You')}</div>
               <div className="flex gap-2">
                 <input
                   className="field w-48"
@@ -236,21 +275,21 @@ export function SkirmishSetup() {
                 >
                   {FACTION_IDS.map((f) => (
                     <option key={f} value={f}>
-                      {FACTIONS[f].name} — {FACTIONS[f].style}
+                      {t(FACTIONS[f].name)} — {t(FACTIONS[f].style)}
                     </option>
                   ))}
                 </select>
-                <span className="field w-20 text-center text-gray-400">Team 1</span>
+                <span className="field w-20 text-center text-gray-400">{t('Team 1')}</span>
               </div>
               <div className="mt-2 flex items-center gap-1.5" data-testid="army-color">
-                <span className="mr-1 text-xs text-gray-400">Army colour</span>
+                <span className="mr-1 text-xs text-gray-400">{t('Army colour')}</span>
                 <button
-                  title="Faction colour"
+                  title={t('Faction colour')}
                   onClick={() => setColor(0)}
                   className={`h-6 rounded border-2 px-1.5 text-[10px] text-gray-200 ${color === 0 ? 'border-gray-100' : 'border-graphite-600'}`}
                   style={{ background: hex(FACTIONS[faction].color) }}
                 >
-                  auto
+                  {t('auto')}
                 </button>
                 {PLAYER_COLORS.map((c) => (
                   <button
@@ -266,7 +305,7 @@ export function SkirmishSetup() {
 
             <section>
               <div className="panel-title mb-2 flex items-center justify-between">
-                <span>{survival ? 'AI Allies (optional)' : 'AI Commanders'}</span>
+                <span>{t(survival ? 'AI Allies (optional)' : 'AI Commanders')}</span>
                 <button
                   className="btn px-2 py-0.5 text-xs"
                   disabled={ais.length >= maxAi}
@@ -282,7 +321,7 @@ export function SkirmishSetup() {
                     ])
                   }
                 >
-                  + Add AI
+                  {t('+ Add AI')}
                 </button>
               </div>
               <div className="flex flex-col gap-2">
@@ -299,7 +338,7 @@ export function SkirmishSetup() {
                     >
                       {FACTION_IDS.map((f) => (
                         <option key={f} value={f}>
-                          {FACTIONS[f].name}
+                          {t(FACTIONS[f].name)}
                         </option>
                       ))}
                     </select>
@@ -310,14 +349,14 @@ export function SkirmishSetup() {
                     >
                       {DIFFICULTIES.map((d) => (
                         <option key={d} value={d}>
-                          {d[0].toUpperCase() + d.slice(1)}
+                          {t(d[0].toUpperCase() + d.slice(1))}
                         </option>
                       ))}
                     </select>
                     <select
                       className="field w-28"
                       value={a.personality}
-                      title={PERSONALITIES[a.personality].description}
+                      title={t(PERSONALITIES[a.personality].description)}
                       onChange={(e) => update(i, { personality: e.target.value as Personality })}
                     >
                       {PERSONALITY_IDS.map((p) => (
@@ -332,9 +371,9 @@ export function SkirmishSetup() {
                       disabled={survival}
                       onChange={(e) => update(i, { team: Number(e.target.value) })}
                     >
-                      <option value={0}>Team 1 (ally)</option>
-                      <option value={1}>Team 2</option>
-                      <option value={2}>Team 3</option>
+                      <option value={0}>{t('Team 1 (ally)')}</option>
+                      <option value={1}>{t('Team 2')}</option>
+                      <option value={2}>{t('Team 3')}</option>
                     </select>
                     <button
                       className="btn px-2 py-1 text-xs"
@@ -347,27 +386,27 @@ export function SkirmishSetup() {
                 ))}
               </div>
               <div className="mt-2 text-xs text-gray-500">
-                AI commanders follow the same economy rules as you and only see what their units see.
+                {t('AI commanders follow the same economy rules as you and only see what their units see.')}
               </div>
             </section>
 
             <section className="grid grid-cols-2 gap-4">
               <div>
-                <div className="panel-title mb-2">Mission</div>
+                <div className="panel-title mb-2">{t('Mission')}</div>
                 <select
                   className="field w-full"
                   value={mission}
                   onChange={(e) => setMission(e.target.value as MissionType)}
                 >
-                  <option value="annihilation">Annihilation — destroy all enemy forces</option>
-                  <option value="decapitation">Decapitation — destroy enemy HQ</option>
-                  <option value="ctf">Capture the Flag — bring the enemy flag home, first to 3</option>
-                  <option value="domination">Domination — hold points to score, first to 1500</option>
-                  <option value="survival">Survival — hold out against enemy waves</option>
+                  <option value="annihilation">{t('Annihilation — destroy all enemy forces')}</option>
+                  <option value="decapitation">{t('Decapitation — destroy enemy HQ')}</option>
+                  <option value="ctf">{t('Capture the Flag — bring the enemy flag home, first to 3')}</option>
+                  <option value="domination">{t('Domination — hold points to score, first to 1500')}</option>
+                  <option value="survival">{t('Survival — hold out against enemy waves')}</option>
                 </select>
               </div>
               <div>
-                <div className="panel-title mb-2">Starting credits</div>
+                <div className="panel-title mb-2">{t('Starting credits')}</div>
                 <select
                   className="field w-full"
                   value={credits}
@@ -381,16 +420,48 @@ export function SkirmishSetup() {
                 </select>
               </div>
               <div>
-                <div className="panel-title mb-2">Unit limit</div>
+                <div className="panel-title mb-2">{t('Unit limit')}</div>
                 <select
                   className="field w-full"
                   value={unitCap}
-                  title="Population per commander: infantry 1, light vehicles 2, tanks/artillery/helicopters 3, heavy tanks 4"
+                  title={t(
+                    'Population per commander: infantry 1, light vehicles 2, tanks/artillery/helicopters 3, heavy tanks 4',
+                  )}
                   onChange={(e) => setUnitCap(Number(e.target.value))}
                 >
                   {UNIT_CAP_OPTIONS.map((c) => (
                     <option key={c} value={c}>
-                      {c ? `${c} population` : 'Unlimited'}
+                      {c ? t('{n} population', { n: c }) : t('Unlimited')}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <div className="panel-title mb-2">{t('Weather')}</div>
+                <select
+                  className="field w-full"
+                  data-testid="weather"
+                  value={weather}
+                  onChange={(e) => setWeather(e.target.value as Weather)}
+                >
+                  {WEATHER_IDS.map((w) => (
+                    <option key={w} value={w}>
+                      {t(WEATHER_LABEL[w])}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <div className="panel-title mb-2">{t('Time of day')}</div>
+                <select
+                  className="field w-full"
+                  data-testid="daytime"
+                  value={dayTime}
+                  onChange={(e) => setDayTime(e.target.value as DayTime)}
+                >
+                  {DAY_TIMES.map((d) => (
+                    <option key={d} value={d}>
+                      {t(DAY_TIME_LABEL[d])}
                     </option>
                   ))}
                 </select>
@@ -400,7 +471,7 @@ export function SkirmishSetup() {
             {survival && (
               <section className="grid grid-cols-2 gap-4">
                 <div>
-                  <div className="panel-title mb-2">Wave strength</div>
+                  <div className="panel-title mb-2">{t('Wave strength')}</div>
                   <select
                     className="field w-full"
                     value={waveDifficulty}
@@ -408,13 +479,13 @@ export function SkirmishSetup() {
                   >
                     {DIFFICULTIES.map((d) => (
                       <option key={d} value={d}>
-                        {d[0].toUpperCase() + d.slice(1)}
+                        {t(d[0].toUpperCase() + d.slice(1))}
                       </option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <div className="panel-title mb-2">Waves</div>
+                  <div className="panel-title mb-2">{t('Waves')}</div>
                   <select
                     className="field w-full"
                     value={waves}
@@ -422,22 +493,22 @@ export function SkirmishSetup() {
                   >
                     {SURVIVAL.waveOptions.map((n) => (
                       <option key={n} value={n}>
-                        {n} waves
+                        {t('{n} waves', { n })}
                       </option>
                     ))}
                   </select>
                 </div>
                 <div className="col-span-2 text-xs text-gray-500">
-                  First wave after 3:00, then one every 1:30, each larger than the last; every 5th wave is
-                  heavy. Waves enter from the unused spawns (red on the map) and are announced 20 s in
-                  advance.
+                  {t(
+                    'First wave after 3:00, then one every 1:30, each larger than the last; every 5th wave is heavy. Waves enter from the unused spawns (red on the map) and are announced 20 s in advance.',
+                  )}
                 </div>
               </section>
             )}
           </div>
 
           <div className="flex flex-col gap-3">
-            <div className="panel-title">Map</div>
+            <div className="panel-title">{t('Map')}</div>
             <div className="grid grid-cols-2 gap-2">
               {MAP_IDS.map((id) => (
                 <button
@@ -445,10 +516,39 @@ export function SkirmishSetup() {
                   className={`btn ${mapId === id ? 'btn-primary' : ''}`}
                   onClick={() => setMapId(id)}
                 >
-                  {id === 'random' ? '🎲 Random' : getMap(id).name}
+                  {id === 'random' ? t('🎲 Random') : getMap(id).name}
                 </button>
               ))}
             </div>
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] uppercase tracking-widest text-gray-500">{t('Custom maps')}</span>
+              <button className="btn px-2 py-0.5 text-xs" onClick={() => go('editor')}>
+                ✎ {t('Map editor')}
+              </button>
+            </div>
+            {customMaps.length > 0 && (
+              <div className="grid grid-cols-2 gap-2" data-testid="custom-maps">
+                {customMaps.map((m) => {
+                  const playable = customMapErrors(toMapDef(m)).length === 0;
+                  return (
+                    <button
+                      key={m.name}
+                      disabled={!playable}
+                      title={
+                        playable ? `${m.width}×${m.height}` : t('Not playable yet: open it in the map editor')
+                      }
+                      className={`btn ${mapId === 'custom' && customName === m.name ? 'btn-primary' : ''}`}
+                      onClick={() => {
+                        setMapId('custom');
+                        setCustomName(m.name);
+                      }}
+                    >
+                      ✎ {m.name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             {mapId === 'random' && (
               <div className="flex items-center justify-between text-xs text-gray-400">
                 <span>{map.name}</span>
@@ -456,16 +556,20 @@ export function SkirmishSetup() {
                   className="btn px-2 py-0.5 text-xs"
                   onClick={() => setMapSeed(1 + Math.floor(Math.random() * 999999))}
                 >
-                  🎲 New map
+                  {t('🎲 New map')}
                 </button>
               </div>
             )}
             <div className="rounded border border-graphite-600 bg-graphite-950 p-2">
-              <MapPreview mapId={mapId} mapSeed={mapSeed} slots={ais.length + 1} survival={survival} />
+              <MapPreview map={map} slots={ais.length + 1} survival={survival} />
             </div>
-            <div className="text-sm text-gray-400">{map.description}</div>
+            <div className="text-sm text-gray-400">{t(map.description)}</div>
             <div className="text-xs text-gray-500">
-              {map.width}×{map.height} tiles · up to {map.spawns.length} commanders
+              {t('{w}×{h} tiles · up to {n} commanders', {
+                w: map.width,
+                h: map.height,
+                n: map.spawns.length,
+              })}
             </div>
           </div>
         </div>
@@ -474,12 +578,12 @@ export function SkirmishSetup() {
           {!valid && (
             <span className="text-sm text-warn-400">
               {survival
-                ? `Survival on this map allows at most ${maxAi} AI allies.`
-                : 'At least one AI must be on an enemy team.'}
+                ? t('Survival on this map allows at most {n} AI allies.', { n: maxAi })
+                : t('At least one AI must be on an enemy team.')}
             </span>
           )}
           <button className="btn btn-primary px-8 py-2 text-base" disabled={!valid} onClick={start}>
-            Deploy ▶
+            {t('Deploy ▶')}
           </button>
         </div>
       </div>

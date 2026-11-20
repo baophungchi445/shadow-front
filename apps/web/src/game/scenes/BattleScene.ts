@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import type { BuildingTypeId, EntityId, UnitTypeId } from '@shadow-front/shared-types';
 import { BALANCE, BUILDINGS, RESEARCH, UNITS } from '@shadow-front/game-data';
 import { actionFor, type HotkeyAction } from '../keybinds';
-import { mapScreenBounds, screenToWorld, worldToScreen, type Entity } from '@shadow-front/game-core';
+import { frontOf, mapScreenBounds, screenToWorld, worldToScreen, type Entity } from '@shadow-front/game-core';
 import type { GameController } from '../GameController';
 import { buildTerrain, type TerrainLayer } from '../render/terrain';
 import { FogLayer } from '../render/fog';
@@ -10,12 +10,16 @@ import { Effects } from '../render/effects';
 import { BuildingView, UnitView } from '../render/views';
 import { drawBuilding } from '../render/shapes';
 import { footprint } from '../render/draw';
+import { QUALITY, type GraphicsQuality } from '../render/quality';
+import { WeatherLayer } from '../render/weather';
 
 export interface SceneSettings {
   edgeScroll: boolean;
   scrollSpeed: number;
   keybinds: Record<HotkeyAction, string>;
-  performanceMode: boolean;
+  graphicsQuality: GraphicsQuality;
+  zoomSpeed: number;
+  panSensitivity: number;
 }
 
 const MIN_ZOOM = 0.45;
@@ -34,6 +38,8 @@ export class BattleScene extends Phaser.Scene {
   private fx!: Effects;
   private ground!: Phaser.GameObjects.Graphics;
   private overlay!: Phaser.GameObjects.Graphics;
+  private smokeLayer!: Phaser.GameObjects.Graphics;
+  private weather!: WeatherLayer;
   private pointViews: { g: Phaser.GameObjects.Graphics; label: Phaser.GameObjects.Text; key: string }[] = [];
   /** Capture the Flag: one graphics object per flag (stand + flag). */
   private flagViews: Phaser.GameObjects.Graphics[] = [];
@@ -70,8 +76,10 @@ export class BattleScene extends Phaser.Scene {
     this.ghost = this.add.graphics().setDepth(25000).setAlpha(0.7);
     this.projectiles = this.add.graphics().setDepth(19000);
     this.overlay = this.add.graphics().setDepth(40000);
+    this.smokeLayer = this.add.graphics().setDepth(30000);
     this.fx = new Effects(this);
     this.fog = new FogLayer(this, world, this.ctrl.team);
+    this.weather = new WeatherLayer(this, world);
     for (const pt of world.points) {
       const s = worldToScreen(pt.x, pt.y);
       const g = this.add.graphics({ x: s.x, y: s.y }).setDepth(s.y);
@@ -121,9 +129,9 @@ export class BattleScene extends Phaser.Scene {
   private onLeave = () => {
     this.pointerInside = false;
   };
-  private onEnter = () => {
-    this.pointerInside = true;
-  };
+  // Edge scrolling starts on the first pointer move inside the canvas: when the canvas appears under a still
+  // mouse, `pointerenter` fires but Phaser still reports the pointer at (0, 0), which would scroll left.
+  private onEnter = () => undefined;
 
   // ---------------------------------------------------------------- input
 
@@ -172,7 +180,13 @@ export class BattleScene extends Phaser.Scene {
       }
       return;
     }
-    switch (actionFor(this.settings.keybinds, e.code)) {
+    const action = actionFor(this.settings.keybinds, e.code);
+    // While placing a building, the Retreat key (R) rotates it instead.
+    if (c.placing && action === 'retreat') {
+      c.rotatePlacement();
+      return;
+    }
+    switch (action) {
       case 'attackMove':
         if (c.selectedOwnUnits().length) c.commandMode = 'attackMove';
         return;
@@ -181,6 +195,13 @@ export class BattleScene extends Phaser.Scene {
         return;
       case 'unload':
         c.unloadSelected();
+        c.deploySelected();
+        return;
+      case 'formation':
+        c.nextFormation();
+        return;
+      case 'smoke':
+        if (c.selectedOwnUnits().some((u) => u.def.smoke)) c.commandMode = 'smoke';
         return;
       case 'stop':
         c.stopSelected();
@@ -252,6 +273,12 @@ export class BattleScene extends Phaser.Scene {
       c.commandMode = 'none';
       return;
     }
+    if (c.commandMode === 'smoke') {
+      const w = this.worldAt(p);
+      c.smokeSelected(w.x, w.y);
+      c.commandMode = 'none';
+      return;
+    }
     if (c.commandMode === 'patrol') {
       const w = this.worldAt(p);
       const wp = this.cameras.main.getWorldPoint(p.x, p.y);
@@ -267,8 +294,9 @@ export class BattleScene extends Phaser.Scene {
     this.pointerInside = true;
     if (this.panDrag) {
       const cam = this.cameras.main;
-      cam.scrollX -= (p.x - this.panDrag.x) / cam.zoom;
-      cam.scrollY -= (p.y - this.panDrag.y) / cam.zoom;
+      const k = this.settings.panSensitivity / cam.zoom;
+      cam.scrollX -= (p.x - this.panDrag.x) * k;
+      cam.scrollY -= (p.y - this.panDrag.y) * k;
       this.panDrag = { x: p.x, y: p.y };
     }
     if (this.dragStart && !this.dragging) {
@@ -289,7 +317,8 @@ export class BattleScene extends Phaser.Scene {
   private onWheel(p: Phaser.Input.Pointer, dy: number): void {
     const cam = this.cameras.main;
     const before = cam.getWorldPoint(p.x, p.y);
-    const zoom = Phaser.Math.Clamp(cam.zoom * (dy > 0 ? 0.9 : 1.1), MIN_ZOOM, MAX_ZOOM);
+    const step = 0.1 * this.settings.zoomSpeed;
+    const zoom = Phaser.Math.Clamp(cam.zoom * (dy > 0 ? 1 - step : 1 + step), MIN_ZOOM, MAX_ZOOM);
     cam.setZoom(zoom);
     cam.preRender();
     const after = cam.getWorldPoint(p.x, p.y);
@@ -413,7 +442,7 @@ export class BattleScene extends Phaser.Scene {
     const now = performance.now();
     const delta = this.lastFrameTime ? now - this.lastFrameTime : 16;
     this.lastFrameTime = now;
-    this.fx.lowDetail = this.settings.performanceMode;
+    this.fx.quality = this.settings.graphicsQuality;
     this.alpha = this.ctrl.update(delta);
     this.updateCamera(delta);
     this.syncViews();
@@ -425,6 +454,8 @@ export class BattleScene extends Phaser.Scene {
     this.drawFlags();
     this.fx.update();
     this.fog.update();
+    this.weather.quality = this.settings.graphicsQuality;
+    this.weather.update(delta);
     if (this.frame % 30 === 0) this.terrain.updateOre(this.ctrl.world);
     this.publishCameraView();
   }
@@ -474,6 +505,7 @@ export class BattleScene extends Phaser.Scene {
         continue;
       }
       v.sync(this.alpha, tick, world.isVisibleTo(team, v.unit));
+      if (v.visible && v.unit.burn && this.frame % 4 === 0) this.fx.flames(v.sx, v.sy - 6 - v.altitude, 10);
     }
     for (const [id, v] of this.buildingViews) {
       const b = v.building;
@@ -489,6 +521,8 @@ export class BattleScene extends Phaser.Scene {
         continue;
       }
       v.sync(tick, visible, v.seen);
+      if (visible && b.burn && this.frame % 3 === 0)
+        this.fx.flames(v.sx, v.sy - b.def.height * 0.6, b.w * 18);
       // Damaged buildings smoke.
       if (visible && b.complete && b.hp < b.maxHp * 0.5 && this.frame % 10 === 0)
         this.fx.smokePuff(v.sx, v.sy - b.def.height, b.hp < b.maxHp * 0.25);
@@ -525,6 +559,26 @@ export class BattleScene extends Phaser.Scene {
           this.fx.impact(s.x, s.y, e.weapon, e.splash);
           break;
         }
+        case 'terrainDestroyed': {
+          // The ground changes for everyone (it is terrain, not a unit); the dust is only shown where visible.
+          this.terrain.destroyTile(e.tx, e.ty, e.kind);
+          if (!world.fog.isVisible(team, e.tx + 0.5, e.ty + 0.5)) break;
+          const s = worldToScreen(e.tx + 0.5, e.ty + 0.5);
+          if (e.was === 'forest') this.fx.flames(s.x, s.y - 8, 14);
+          for (let k = 0; k < 3; k++) this.fx.smokePuff(s.x + (k - 1) * 8, s.y - 10, e.was === 'forest');
+          break;
+        }
+        case 'crit': {
+          if (!world.fog.isVisible(team, e.x, e.y)) break;
+          const s = worldToScreen(e.x, e.y);
+          this.fx.marker(s.x, s.y - 8, 0xffe14a);
+          break;
+        }
+        case 'smoke': {
+          if (!world.fog.isVisible(team, e.x, e.y)) break;
+          sfx.play('explosion', this.audibility(e.x, e.y) * 0.3);
+          break;
+        }
         case 'destroyed': {
           if (!world.fog.isVisible(team, e.x, e.y)) break;
           const s = worldToScreen(e.x, e.y);
@@ -534,7 +588,12 @@ export class BattleScene extends Phaser.Scene {
             e.kind === 'building' ? 'explosionBig' : 'explosion',
             this.audibility(e.x, e.y) * (e.big ? 1 : 0.5),
           );
-          if (!this.settings.performanceMode && (e.kind === 'building' || e.big))
+          const scorch = QUALITY[this.settings.graphicsQuality].scorch;
+          if (
+            scorch === 'all'
+              ? e.kind === 'building' || e.big
+              : scorch === 'buildings' && e.kind === 'building'
+          )
             this.terrain.scorch(e.x, e.y, e.kind === 'building' ? 46 : 18);
           break;
         }
@@ -548,12 +607,22 @@ export class BattleScene extends Phaser.Scene {
     const world = this.ctrl.world;
     const team = this.ctrl.team;
     for (const p of world.projectiles) {
-      if (!world.fog.isVisible(team, p.x, p.y)) continue;
-      const s = worldToScreen(p.x, p.y);
       const total = Math.hypot(p.tx - p.startX, p.ty - p.startY) || 1;
       const t = 1 - Math.min(1, Math.hypot(p.tx - p.x, p.ty - p.y) / total);
+      // Ballistic shells: mark the landing zone (red = incoming enemy fire) so units can be moved out of it.
+      if (p.weapon.type === 'artillery' && world.fog.isVisible(team, p.tx, p.ty)) {
+        const m = worldToScreen(p.tx, p.ty);
+        const r = Math.max(0.8, p.weapon.splash ?? 0.8) * 32;
+        const enemy = p.team !== team;
+        g.lineStyle(1.5, enemy ? 0xff4a3a : 0xffffff, (enemy ? 0.35 : 0.15) + 0.4 * t);
+        g.strokeEllipse(m.x, m.y, r * (1.2 - 0.4 * t), r * 0.5 * (1.2 - 0.4 * t));
+      }
+      if (!world.fog.isVisible(team, p.x, p.y)) continue;
+      const s = worldToScreen(p.x, p.y);
       let z = 12 + (p.air ? 28 * t : 0);
-      if (p.weapon.type === 'artillery') z = 14 + Math.sin(Math.PI * t) * total * 9;
+      // Parabolic arc (≈26 px of height per tile of apex); bombs fall from altitude.
+      if (p.weapon.type === 'artillery')
+        z = p.apex > 0 ? 14 + 4 * p.apex * t * (1 - t) * 26 : 14 + 34 * (1 - t);
       const dir = worldToScreen(p.tx - p.x, p.ty - p.y);
       const dl = Math.hypot(dir.x, dir.y) || 1;
       const ux = dir.x / dl;
@@ -595,6 +664,24 @@ export class BattleScene extends Phaser.Scene {
     o.clear();
     const c = this.ctrl;
     const world = c.world;
+
+    // Smoke screens: soft layered grey ellipses that thin out as they expire.
+    const sm = this.smokeLayer;
+    sm.clear();
+    for (const s of world.smokes) {
+      if (!world.fog.isExplored(c.team, Math.floor(s.x), Math.floor(s.y))) continue;
+      const fade = Math.min(1, (s.until - world.tick) / 80);
+      const p = worldToScreen(s.x, s.y);
+      for (let k = 0; k < 6; k++) {
+        const a = k * 1.05 + world.tick * 0.004;
+        const r = s.radius * (k === 0 ? 0 : 0.45);
+        const q = worldToScreen(s.x + Math.cos(a) * r, s.y + Math.sin(a) * r);
+        sm.fillStyle(k % 2 ? 0xb8b6b0 : 0x9a9892, 0.32 * fade);
+        sm.fillEllipse(q.x, q.y - 14, s.radius * 52, s.radius * 30);
+      }
+      sm.fillStyle(0xd0cec8, 0.25 * fade);
+      sm.fillEllipse(p.x, p.y - 20, s.radius * 70, s.radius * 38);
+    }
 
     for (const id of c.selection) {
       const e = world.get(id);
@@ -698,7 +785,8 @@ export class BattleScene extends Phaser.Scene {
     // Cursor feedback.
     let cursor = 'default';
     if (c.placing) cursor = 'copy';
-    else if (c.commandMode === 'attackMove' || c.commandMode === 'patrol') cursor = 'crosshair';
+    else if (c.commandMode === 'attackMove' || c.commandMode === 'patrol' || c.commandMode === 'smoke')
+      cursor = 'crosshair';
     else if (c.selectedOwnUnits().length) {
       if (this.frame % 4 === 0) {
         const t = this.pick(this.input.activePointer);
@@ -736,10 +824,34 @@ export class BattleScene extends Phaser.Scene {
         );
       }
     const center = worldToScreen(tx + def.w / 2, ty + def.h / 2);
+    const facing = c.placingFacing;
     g.save();
     g.translateCanvas(center.x, center.y);
+    if (facing % 2 === 1) g.scaleCanvas(-1, 1);
     drawBuilding(g, type, this.colorOf(c.humanId), 1, 0);
     g.restore();
+    // Front arrow: where units come out / the default rally side.
+    const front = frontOf({ tx, ty, w: def.w, h: def.h, facing }, 0.9);
+    const tip = worldToScreen(front.x, front.y);
+    const [dx, dy] = [
+      [0, 1],
+      [1, 0],
+      [0, -1],
+      [-1, 0],
+    ][facing];
+    const base = worldToScreen(front.x - dx * 0.9, front.y - dy * 0.9);
+    g.lineStyle(3, 0xf0d060, 0.9);
+    g.lineBetween(base.x, base.y, tip.x, tip.y);
+    const ang = Math.atan2(tip.y - base.y, tip.x - base.x);
+    g.fillStyle(0xf0d060, 0.95);
+    g.fillTriangle(
+      tip.x + Math.cos(ang) * 8,
+      tip.y + Math.sin(ang) * 8,
+      tip.x + Math.cos(ang + 2.4) * 8,
+      tip.y + Math.sin(ang + 2.4) * 8,
+      tip.x + Math.cos(ang - 2.4) * 8,
+      tip.y + Math.sin(ang - 2.4) * 8,
+    );
     if (def.needsOre) {
       // Highlight extraction radius.
       g.lineStyle(1, 0xf0c040, 0.6);

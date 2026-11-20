@@ -785,3 +785,383 @@ Nguồn: các mục ⬜ trong `docs/PLAN_STATUS.md`. Vẫn chưa làm online / �
 - Còn lại (offline): AI chưa dùng chở quân / Bunker; nhịp chơi Rush còn quá mạnh; chưa có Fighter Jet, Bomber, Mobile Command Vehicle;
   chưa có đội hình (formation), trình sửa map, chọn ngôn ngữ, tùy chỉnh chất lượng đồ họa.
 - Tạm hoãn theo yêu cầu: toàn bộ phần online (tài khoản, chat, lobby, PvP, xếp trận, admin) và đồ họa / âm thanh thật.
+
+---
+
+## Đợt 8 — kế hoạch (chơi offline với máy)
+
+| # | Công việc | Mục PLAN | Trạng thái |
+|---|---|---|---|
+| 8.1 | **AI dùng chở quân và Bunker** (APC chở bộ binh ra trận, trực thăng thả quân, cho quân vào Bunker) + **AI đồng minh phối hợp** (cùng tấn công, cứu nhau) | §9, §10 | ✅ |
+| 8.2 | **Cân bằng lối đánh Rush** (đo bằng mô phỏng AI đấu AI) | §10, §17 | ✅ |
+| 8.3 | Unit mới: **Fighter Jet, Bomber, Mobile Command Vehicle** | §7 | ✅ |
+| 8.4 | **Chọn đội hình** khi di chuyển (rải đều / hàng ngang / hàng dọc / mũi tên) | §8 | ✅ |
+| 8.5 | Settings: **chất lượng đồ họa**, tốc độ zoom, độ nhạy chuột | §16 | ✅ |
+| 8.6 | **Thành thạo faction** trong Profile | §15 | ✅ |
+| 8.7 | Kiểm tra (unit test + trình duyệt Chrome/Edge/Firefox), tài liệu | — | ✅ |
+
+## Nhật ký đợt 8
+
+### ✅ 8.1 AI dùng chở quân, Bunker, phối hợp đồng minh
+- **Bunker**: AI phòng thủ (Fortress, Warlord) xây 1 Bunker và cho bộ binh rẻ nhất vào trú; luôn giữ lại ít nhất 4 bộ binh để cơ động.
+- **APC**: khi mở đợt tấn công, bộ binh gần APC lên xe (APC chờ tối đa 6 giây); tới gần mục tiêu hoặc gặp địch trong 7 ô thì thả quân xuống đánh.
+- **Trực thăng thả quân**: AI thích không quân (Eagle, Shadow, Warlord; từ Normal trở lên) giữ 1 Transport Helicopter, chở 6 bộ binh bay tới
+  mỏ / nhà điện của địch đã biết, thả quân cách mục tiêu 3 ô rồi bay về. Trực thăng bị bắn còn dưới 40% máu thì thả quân ngay.
+- **Phối hợp đồng minh**: AI mở đợt tấn công thì báo cho đồng đội; đồng đội có đủ quân (≥ 50% ngưỡng tấn công) sẽ **cùng đánh một mục tiêu**.
+  Căn cứ bị ≥ 3 địch tấn công thì AI **gọi cứu viện**; đồng minh ở gần (≤ 50 ô) gửi một nửa quân đang rảnh (tối đa 1 lần / 30 giây).
+  AI vẫn chỉ hành động qua lệnh và chỉ thấy những gì sương mù cho phép.
+- Mô phỏng 2v2 Hard: mọi hành vi đều xuất hiện (vào Bunker, lên/xuống APC, 2–12 lần thả quân mỗi trận, 1–5 lần cứu viện, 1–3 lần cùng tấn công).
+- Test: game-ai +4 (`tactics.test.ts`: Bunker có quân trú và vẫn giữ 4 bộ binh; APC chở ≥ 3 lính rồi thả xuống; đồng minh cùng tấn công;
+  trực thăng chở và thả ≥ 4 lính).
+
+### ✅ 8.2 Cân bằng lối đánh Rush
+- Đo trước khi sửa: Rush đấu 4 tính cách còn lại × 3 map × 2 độ khó × 2 phía = 48 trận → **Rush thắng 46/48**, đa số trong 6–10 phút.
+- Nguyên nhân (theo dõi từng trận): các AI khác tiêu ~70% tiền vào công trình / công nghệ trong 4 phút đầu, đem nhóm 3 lính đi chiếm điểm
+  rồi bị tiêu diệt dần; Rush có 2 mỏ + giữ hết điểm chiến lược nên thu nhập cao hơn ~40%. Đổi chỉ số unit (đạn tăng mạnh hơn với bộ binh,
+  rifleman đắt hơn, Normal cũng khắc chế) **không** thay đổi kết quả → vấn đề ở cách AI chi tiền, không ở chỉ số.
+- Sửa:
+  - **Quân thường trực tối thiểu**: từ phút 2, nếu quân yếu hơn mức tối thiểu (tăng dần theo thời gian) hoặc yếu hơn 80% quân địch
+    đã thấy, AI chỉ xây công trình kinh tế / sản xuất / phòng thủ, tạm dừng nghiên cứu và nâng cấp, không để dành tiền.
+  - Nhóm chiếm điểm chỉ đi khi ở nhà có ≥ 6 quân mặt đất và đủ quân tối thiểu.
+  - **Rush đánh đổi kinh tế lấy tốc độ**: chỉ 1 mỏ và giữ tối đa 1 điểm chiến lược; đợt đầu muộn hơn một chút (×0,75 thay vì ×0,6)
+    và không gom quân quá 1,25 × ngưỡng trước đợt đầu.
+- Kết quả (48 trận như trên): **Rush thắng 17/48 (35%)**; vẫn thường thắng Fortress (lối "rùa"), thua Warlord / Eagle / Shadow nếu không
+  thắng sớm. Trận dài **8–23 phút**. Với người chơi: Rush ở Normal tấn công lần đầu khoảng phút 5 (trước đây khoảng phút 4).
+- Test cũ "đồng minh AI giữ được Survival" bị hỏng lúc đầu (quy tắc chiếm điểm làm AI mất thu nhập trong Survival) → Survival dùng điều kiện cũ.
+  Tổng: **106/106** test.
+
+### ✅ 8.3 Fighter Jet, Bomber, Mobile Command Vehicle
+- **Fighter Jet** (Airfield, cần Radar Station, 1100◆): máy bay nhanh nhất game, tên lửa đối không (mạnh ×1,8 với máy bay),
+  **không bắn được mục tiêu mặt đất**. Khắc chế trực thăng, drone, Bomber.
+- **Bomber** (Airfield, cần Research Center, 1800◆): bay tới trên đầu mục tiêu và thả bom (150 sát thương, nổ lan 1,8 ô, rất mạnh với
+  công trình); chậm và không tự vệ được trên không → cần Fighter / SAM yểm trợ.
+- **Mobile Command Vehicle (MCV)** (War Factory, cần Research Center, 2500◆): xe không vũ khí, bấm **Deploy** (hoặc phím Unload, mặc định U)
+  để **triển khai thành Headquarters ngay tại chỗ**, ở bất kỳ đâu (không cần gần căn cứ) → mở căn cứ tiền tuyến, xây công trình quanh đó.
+  HQ mới bắt đầu ở 60% và tự hoàn thiện sau khoảng 12 giây. Không hủy được để lấy lại tiền HQ (chặn lỗi lách tiền 2500 → 3000).
+- **Sửa lỗi lệnh tấn công**: trước đây chọn cả nhóm rồi chuột phải vào máy bay thì các unit không bắn được máy bay (tăng…) nhận lệnh
+  rồi đứng im. Giờ chúng di chuyển kèm tấn công tới chỗ mục tiêu; nếu không unit nào bắn được thì lệnh bị từ chối kèm lý do.
+- AI: xây Fighter Jet khi đã thấy máy bay địch; Eagle và Warlord dùng Bomber. **AI chưa dùng MCV**.
+- Hình tạm (vẽ bằng code): Fighter cánh tam giác, Bomber cánh dài 2 động cơ, MCV xe 6 bánh có ăng-ten / chảo; icon riêng cho cả 3.
+  Phím Unload trên panel giờ hiện đúng phím đã gán (trước đây luôn ghi "U").
+- Test: game-core +4 (MCV triển khai ở xa căn cứ thành HQ, xây được quanh HQ mới, không hủy được; unit thường / chỗ bị chặn / người khác
+  không triển khai được; Fighter bắn rơi trực thăng nhưng không nhắm xe tăng; Bomber phá HQ). Tổng **110/110**.
+
+### ✅ 8.4 Chọn đội hình khi di chuyển
+- 4 kiểu: **Spread** (rải đều quanh điểm đến như trước, mỗi unit đi tốc độ riêng), **Line** (hàng ngang vuông góc với hướng đi, tối đa 8
+  một hàng), **Column** (hai hàng dọc, hợp đi đường / cầu), **Wedge** (mũi tên, unit nhiều máu nhất ở mũi).
+- Line / Column / Wedge: cả nhóm **đi cùng tốc độ của unit chậm nhất** để giữ đội hình (bộ binh không bỏ xe tăng lại phía sau);
+  đội hình quay theo hướng từ tâm nhóm tới điểm đến; ô bị chặn thì unit lấy ô trống gần nhất; bấm vào ô đá / nước thì đội hình đặt ở
+  chỗ trống gần nhất. Máy bay vẫn bay theo vòng tròn.
+- Giao diện: hàng **Formation** trong panel lệnh (4 nút, có chú thích khi rê chuột), phím **B** đổi lần lượt (đổi phím được trong Settings);
+  lựa chọn được lưu lại. Áp dụng cho chuột phải di chuyển và attack-move.
+- Lệnh `move` có thêm trường `formation` (không bắt buộc), vẫn đi qua `world.issue()` như mọi lệnh khác.
+- Test: game-core +3 (hình dạng 3 kiểu đội hình; nhóm Line chung tốc độ, trải theo chiều ngang hướng đi, mỗi unit một ô, bộ binh đi cùng
+  xe tăng; Wedge đặt xe tăng ở mũi, Spread không giới hạn tốc độ). Tổng **113/113**.
+
+### ✅ 8.5 Settings: chất lượng đồ họa, tốc độ zoom, độ nhạy chuột
+- **Graphics quality** Low / Medium / High (thay cho ô "Performance mode" của v0.7; ai đã bật Performance mode được tự chuyển sang Low):
+  - Low: tối đa 350 hạt hiệu ứng, chỉ giữ 1/3 khói / mảnh vỡ, không có vết cháy, **tắt khử răng cưa** (anti-aliasing);
+  - Medium: 800 hạt, giữ 1/2 khói / mảnh vỡ, vết cháy chỉ khi công trình nổ;
+  - High (mặc định): 1400 hạt, đầy đủ hiệu ứng như trước.
+  Hiệu ứng đổi ngay khi chỉnh trong trận; khử răng cưa áp dụng từ trận sau (WebGL không đổi được khi đang chạy).
+- **Mouse-wheel zoom speed** 0,5–2 (mỗi nấc lăn zoom 5–20%) và **Mouse drag-pan sensitivity** 0,5–2 (kéo chuột giữa để cuộn bản đồ).
+- Giá trị lưu lại; dữ liệu cũ / hỏng trở về mặc định. Cập nhật bộ test trình duyệt round7 cho ô chất lượng mới.
+- Còn thiếu (offline): chọn ngôn ngữ (giao diện hiện chỉ có tiếng Anh), độ phân giải (trình duyệt tự theo cửa sổ).
+
+### ✅ 8.6 Thành thạo faction (offline)
+- Mỗi faction có **cấp thành thạo 0–10**, tăng theo XP của các trận chơi bằng faction đó (không tính XP thưởng nhiệm vụ ngày / tuần,
+  vì nhiệm vụ không gắn với faction). Mốc XP: 300, 800, 1500, 2400, 3500, 5000, 7000, 9500, 12 500, 16 000.
+- Profile có mục **Faction mastery** (5 ô: cấp, thanh tiến độ, XP còn thiếu; đạt cấp 10 ghi MAX); màn kết quả ghi
+  "<faction> mastery +N XP · level a → b".
+- 2 danh hiệu mới: **Specialist** (một faction đạt cấp 5), **Grandmaster** (một faction đạt cấp 10).
+- Hồ sơ cũ (trước v0.8) được **tính lại thành thạo từ lịch sử trận**; dữ liệu hỏng (âm, faction không tồn tại) bị bỏ.
+- Sửa nhỏ: lịch sử trận trong Profile ghi đúng tên chế độ "Capture the Flag".
+- Test: game-core +4 (mốc cấp; chỉ faction đã chơi tăng, đúng bằng XP trận; mở Specialist / Grandmaster; dựng lại từ lịch sử + lọc dữ liệu hỏng).
+
+### ✅ 8.7 Kiểm tra, trình duyệt, tài liệu
+- `pnpm check`: typecheck ✅, lint ✅, test **117/117** (game-data 17, game-core 87, game-ai 10, server 3) ✅, build ✅.
+- Bộ test trình duyệt mới **round8** (18 bài): chuyển "Performance mode" cũ sang Low, lưu chất lượng / zoom / độ nhạy kéo chuột,
+  bảng thành thạo + danh hiệu Specialist bị khóa, hàng Formation + phím B + chuột phải đi hàng ngang đúng tốc độ unit chậm nhất,
+  nút Wedge, Fighter / Bomber / MCV trong menu sản xuất, triển khai MCV bằng nút, ra lệnh đánh trực thăng (jet bắn, tăng attack-move),
+  jet bắn rơi trực thăng, thắng trận → màn kết quả và Profile có thành thạo.
+- Kết quả 10 bộ × 3 trình duyệt (Chrome, Edge, Firefox): **tất cả PASS, 0 lỗi console**. Lần chạy đầu có 3 lỗi chập chờn —
+  Chrome `tutorial` (bước chiếm điểm kiểm tra quá sớm), Firefox `smoke2` (trình duyệt không khởi động được), Firefox `round7`
+  (chuột phải vào APC) — chạy lại riêng đều PASS, game không phải sửa.
+- Tài liệu cập nhật v0.8: CHANGELOG, README (phím T / U / B), GAMEPLAY_SYSTEMS §5k, AI_DESIGN §6g, TESTING, DEVELOPMENT_ROADMAP,
+  PLAN_STATUS (chỉ sửa các mục liên quan); menu chính ghi v0.8.
+
+## Tổng kết đợt 8
+- Đã xong: AI dùng APC / trực thăng thả quân / Bunker và phối hợp đồng minh; cân bằng Rush (thắng 96% → 35% trong 48 trận mô phỏng);
+  3 unit mới (Fighter Jet, Bomber, Mobile Command Vehicle); chọn đội hình; Settings chất lượng đồ họa / zoom / độ nhạy chuột;
+  thành thạo faction + 2 danh hiệu; sửa lệnh tấn công máy bay.
+- Chất lượng: 117 unit test, 10 bộ test trình duyệt PASS trên Chrome / Edge / Firefox.
+- Còn lại (offline): chọn ngôn ngữ, trình sửa map, Long-range Missile System, chí mạng / áp chế / lựu đạn khói / cháy,
+  công trình riêng từng faction, nâng cấp từng unit, thời tiết / ngày đêm, AI dùng MCV.
+- Tạm hoãn theo yêu cầu: toàn bộ phần online và đồ họa / âm thanh thật.
+
+---
+
+## Đợt 9 — kế hoạch (chơi offline với máy)
+
+| # | Công việc | Mục PLAN | Trạng thái |
+|---|---|---|---|
+| 9.1 | **Chọn ngôn ngữ**: giao diện tiếng Việt / tiếng Anh | §16 | ✅ |
+| 9.2 | **Trình sửa map** trong game: vẽ địa hình, mỏ, điểm xuất phát, điểm chiến lược; lưu và chơi map tự làm | §6 | ✅ |
+| 9.3 | Chiến đấu: unit **Long-range Missile System**, **áp chế** bộ binh, **đạn cháy** | §7, §10 | ✅ |
+| 9.4 | Kiểm tra (unit test + Chrome / Edge / Firefox), tài liệu | — | ✅ |
+
+## Nhật ký đợt 9
+
+### ✅ 9.1 Chọn ngôn ngữ (tiếng Việt / tiếng Anh)
+- Settings → **Ngôn ngữ / Language**: English (mặc định) hoặc **Tiếng Việt**; đổi là áp dụng ngay, được lưu lại.
+- Hàm dịch `t()` (`apps/web/src/i18n`): khóa là chuỗi tiếng Anh, có tham số `{n}`; thiếu bản dịch thì hiện tiếng Anh nên không bao giờ trống.
+  `t.msg()` dịch thông báo lúc chạy (toast, lý do lệnh bị từ chối từ phần mô phỏng) theo câu cố định + mẫu có tên / số
+  (vd. "Đã chiếm điểm chiến lược: Central Field", "Đã đạt giới hạn quân (150)").
+- Đã dịch: menu chính, thiết lập trận, Settings + bảng phím, Profile, màn kết quả, Chiến dịch (khung), menu tạm dừng, thanh trên,
+  panel chọn / lệnh / sản xuất / nghiên cứu / xây dựng, đội hình, mục tiêu, khoảng 70 thông báo trong trận và lý do lỗi.
+- Giữ tiếng Anh (là dữ liệu game, có thể dịch sau): tên + mô tả unit / công trình / phe / map / công nghệ, nội dung nhiệm vụ chiến dịch,
+  thành tích, nhiệm vụ ngày / tuần.
+- Menu chính ghi v0.9.
+
+### ✅ 9.2 Trình sửa map trong game
+- Menu chính → **Map editor** (hoặc nút "✎ Map editor" trong Thiết lập trận). Bản đồ nhìn từ trên xuống, kéo chuột để vẽ:
+  - 10 loại địa hình (cát, cỏ, đường, bê tông, quặng, tuyết; đá / nước / nhà / rừng chặn đường), cỡ cọ 1 / 3 / 5 / 9;
+  - **điểm xuất phát** (2–4, ô HQ 3×3) và **điểm chiến lược** (tối đa 8) — bấm lại để xóa;
+  - **Đối xứng** (bật sẵn): vẽ / đặt xoay 180° để hai phía công bằng; cỡ map 48 / 64 / 80.
+- **Kiểm tra trực tiếp** bằng đúng luật của game (`customMapErrors` trong game-data): cỡ map, 2–4 điểm xuất phát có 3×3 đất trống
+  không quặng / không sát mép, không quá gần nhau, điểm chiến lược trên đất trống, mọi căn cứ / điểm đi bộ tới được, mỗi căn cứ có
+  quặng (≥ 5 ô) trong 12 ô. Lỗi được liệt kê (có tiếng Việt); chỉ map hợp lệ mới bấm **Play this map** được.
+- **Lưu** trong trình duyệt (tối đa 20 map, gọn: 1 ký tự / ô), danh sách Load / Delete; dữ liệu hỏng bị bỏ qua.
+  Thiết lập trận có mục **Custom maps** (map chưa hợp lệ bị khóa); trận dùng `mapId: 'custom'` + `customMap`, World kiểm tra lại
+  map trước khi chạy. Chơi được mọi chế độ (kể cả Survival, CTF) với máy.
+- **Sửa lỗi phát hiện khi test**: khi khung game hiện ra dưới con chuột đang đứng yên (vd. vừa bấm Deploy), camera **tự trôi sang trái**
+  vì Phaser coi chuột ở (0, 0) = mép trái. Giờ cuộn theo mép chỉ bật sau khi chuột thật sự di chuyển trong khung game.
+- Test: game-data +4 (mã hóa ô; map hợp lệ; thiếu điểm xuất phát / đặt trên đá / quá gần / bị chia cắt / điểm trên đá; sai cỡ / hỏng dữ liệu),
+  game-core +2 (trận chạy trên map tự làm, HQ đúng vị trí; từ chối map thiếu / không hợp lệ).
+
+### ✅ 9.3 Long-range Missile System, áp chế, đạn cháy
+- **Long-range Missile System** (War Factory, cần Research Center + Radar Station, 2000◆): tầm **20 ô** (xa nhất game), không bắn được
+  trong 6 ô, tên lửa 150 sát thương nổ lan + gây cháy. Cần quân trinh sát / radar để thấy mục tiêu ở xa. AI Fortress có dùng.
+- **Đạn cháy** (`WeaponDef.burn`): Missile System (6 sát thương/giây × 5 giây) và MLRS của Eastern Legion (4/giây × 4 giây) làm mục tiêu
+  mặt đất / công trình **cháy tiếp** sau khi trúng; trúng lại thì làm mới thời gian, không cộng dồn; máy bay không cháy. Có lửa nhỏ trên
+  mục tiêu đang cháy.
+- **Áp chế**: bộ binh trúng đạn thường / pháo tích "điểm áp chế" bằng sát thương nhận (tối đa 120); từ 40 trở lên thì **đi chậm 45%** và
+  **bắn chậm 40%**, panel ghi "Suppressed / Bị áp chế"; giảm dần khi hết bị bắn. Tên lửa không gây áp chế; xe không bị áp chế.
+- Kiểm tra lại cân bằng (48 trận như 8.2): Rush thắng 15/48 (31%), trận 7–26 phút (trung vị 12).
+- Test: game-core +4 (cháy đúng tổng sát thương rồi tắt; máy bay không cháy, cháy lại không cộng dồn; bộ binh bị áp chế đi chậm rồi hồi
+  phục, rocket / xe không bị; Missile System tầm xa nhất, có tầm tối thiểu, cần Radar). Tổng **127/127**.
+
+### ✅ 9.4 Kiểm tra, trình duyệt, tài liệu
+- `pnpm check`: typecheck ✅, lint ✅, test **127/127** (game-data 21, game-core 93, game-ai 10, server 3) ✅, build ✅.
+- Bộ test trình duyệt mới **round9** (20 bài): đổi sang tiếng Việt (Settings, menu, thiết lập trận, HUD, thông báo từ mô phỏng, menu tạm dừng)
+  rồi về tiếng Anh; trình sửa map (báo lỗi, đối xứng điểm xuất phát, cọ quặng / nước / điểm chiến lược, lưu, tự chọn trong thiết lập trận);
+  trận trên map tự làm với camera đúng căn cứ; Missile System trong menu nhà máy; trạng thái bị áp chế; công trình cháy mất máu.
+- Kết quả 11 bộ × 3 trình duyệt (Chrome, Edge, Firefox): **tất cả PASS, 0 lỗi console**. Lần chạy đầu Chrome `tutorial` hỏng ở bước
+  di chuyển (script chỉ chờ 0,4 giây sau chuột phải) → chạy lại riêng 3 lần đều 12/12, game không phải sửa.
+- Tài liệu cập nhật v0.9: CHANGELOG, README, GAMEPLAY_SYSTEMS §5l, TESTING, DEVELOPMENT_ROADMAP, PLAN_STATUS.
+
+## Tổng kết đợt 9
+- Đã xong: giao diện **tiếng Việt / tiếng Anh**; **trình sửa map** (vẽ, kiểm tra, lưu, chơi); **Long-range Missile System**,
+  **đạn cháy**, **áp chế bộ binh**; sửa lỗi camera tự trôi lúc vào trận.
+- Chất lượng: 127 unit test, 11 bộ test trình duyệt PASS trên Chrome / Edge / Firefox.
+- Còn lại (offline): dịch tên / mô tả unit, map, nội dung chiến dịch sang tiếng Việt; công trình riêng từng faction; nâng cấp từng unit;
+  chí mạng, lựu đạn khói; thời tiết / ngày đêm; AI dùng MCV; độ cao địa hình, môi trường phá hủy được.
+- Tạm hoãn theo yêu cầu: toàn bộ phần online và đồ họa / âm thanh thật.
+
+---
+
+## Đợt 10 — kế hoạch (chơi offline với máy)
+
+| # | Công việc | Mục PLAN | Trạng thái |
+|---|---|---|---|
+| 10.1 | Dịch **dữ liệu game** sang tiếng Việt (unit, công trình, công nghệ, phe, map, chiến dịch, hướng dẫn, thành tích, nhiệm vụ, danh hiệu) | §16 | ✅ |
+| 10.2 | **Công trình riêng từng phe** (mỗi phe 1 công trình) | §5 | ✅ |
+| 10.3 | **Lựu đạn khói** và **đòn chí mạng** | §10 | ✅ |
+| 10.4 | **AI dùng MCV** mở căn cứ tiền tuyến | §11 | ✅ |
+| 10.5 | Kiểm tra (unit test + Chrome / Edge / Firefox), tài liệu | — | ✅ |
+
+## Nhật ký đợt 10
+
+### ✅ 10.1 Dịch dữ liệu game sang tiếng Việt
+- 247 chuỗi dữ liệu: tên + mô tả 23 unit, 14 công trình, 9 công nghệ; 5 phe + phong cách; 5 tính cách AI; mô tả 9 map; 4 nhiệm vụ chiến dịch
+  (tên, phụ đề, lời dẫn, mục tiêu, gợi ý) + hướng dẫn; 13 thành tích; 11 nhiệm vụ ngày / tuần; 12 danh hiệu.
+  Giữ nguyên tên riêng: tên map, tên điểm chiến lược, tên chỉ huy máy.
+- Hiển thị ở: panel chọn / sản xuất / nghiên cứu / xây dựng, mục tiêu trong trận, Chiến dịch, Profile, màn kết quả, Sổ tay quân đội,
+  thiết lập trận (phe, mô tả map, tính cách), danh hiệu trên menu chính.
+- Thông báo có tên bên trong cũng được dịch phần tên (vd. "Requires Barracks, War Factory" → "Cần Doanh trại, Nhà máy chiến xa").
+
+### ✅ 10.2 Công trình riêng từng phe
+| Phe | Công trình | Tác dụng |
+|---|---|---|
+| Western Alliance | **Field Hospital** (Bệnh viện dã chiến), 900◆, cần Barracks | hồi 5 máu/giây cho **mọi** bộ binh phe ta trong 6 ô |
+| Eastern Legion | **Howitzer Emplacement** (Trận địa lựu pháo), 1400◆, cần War Factory | pháo cố định tầm 13 ô, 90 sát thương nổ lan, không bắn trong 3 ô; nâng cấp được |
+| Pacific Technology | **Repair Bay** (Trạm sửa chữa), 900◆, cần War Factory | sửa 12 máu/giây cho mọi xe, máy bay, công trình phe ta trong 5 ô |
+| Desert Corps | **Oil Derrick** (Giàn khoan dầu), 1200◆, cần Barracks | +4 tiền/giây ở bất kỳ đâu, không cần quặng, không cạn |
+| Iron Republic | **Bastion** (Pháo đài), 1600◆, cần War Factory | 5200 máu, pháo 70 sát thương tầm 8; nâng cấp được |
+
+- Bệnh viện / trạm sửa chỉ hoạt động khi đủ điện. Lệnh `build` từ chối công trình của phe khác; bảng xây dựng chỉ hiện công trình của
+  phe mình (giờ 7 cột). Mỗi công trình có hình và icon riêng (chữ thập đỏ, cần cẩu, tháp khoan có cần bơm chuyển động, nòng pháo dài).
+- AI: xây công trình phe mình sau War Factory (Desert Corps xây 2 giàn khoan).
+- **Sửa AI**: test "đồng minh AI giữ được Survival" hỏng — đợt cuối còn 1 xe tăng hạng nặng, AI Normal (không tự khắc chế) cứ sản xuất
+  Ranger súng trường nên không hạ được. Giờ **mọi độ khó**, khi căn cứ bị xe bọc thép tấn công, AI ưu tiên vũ khí rocket / pháo tăng.
+- Test: game-core +5 (mỗi phe đúng 1 công trình, phe khác không xây được; bệnh viện chữa bộ binh không chữa xe; trạm sửa sửa xe;
+  giàn khoan +4/giây không cần quặng; lựu pháo bắn mục tiêu cách 10 ô).
+
+### ✅ 10.3 Lựu đạn khói và đòn chí mạng
+- **Lựu đạn khói** (Rifleman, Ranger, Engineer): chọn lính → nút **Smoke** hoặc phím **Z** (đổi được) → bấm chỗ cần thả (tối đa 7 ô).
+  Lính gần nhất còn lựu đạn sẽ ném; đám khói bán kính 2,5 ô, tồn tại 20 giây; mỗi lính hồi 30 giây (panel ghi "Smoke grenade ready /
+  in N s"). Quân mặt đất trong khói **địch không nhìn thấy** (nên không nhắm bắn được), trừ khi địch đứng sát trong 2 ô; phe mình vẫn thấy.
+  Khói vẽ bằng nhiều lớp xám mờ dần. AI ném khói che bộ binh bị thương khi đang bị công trình phòng thủ bắn.
+- **Đòn chí mạng**: mỗi phát bắn 8% cơ hội (+3% mỗi cấp cựu binh) gây **×1,5 sát thương**; có dấu vàng ở điểm trúng. Dùng RNG theo seed
+  của trận nên vẫn tái lập được.
+- Test: game-core +3 (ném khói: đúng tầm, unit không có lựu đạn bị từ chối, hồi chiêu, khói tan; unit trong khói bị ẩn với địch ở xa,
+  phe mình vẫn thấy, địch tới sát thì thấy; tỉ lệ chí mạng đúng khoảng cấu hình). Tổng **135/135**.
+
+### ✅ 10.4 AI dùng MCV mở căn cứ tiền tuyến
+- AI Khó / Cực khó (trừ Rush) từ phút 10, khi đã có ≥ 2 mỏ, đủ quân thường trực và có Research Center: **để dành tiền** xây 1 MCV,
+  chọn mỏ quặng còn trống gần nhất cách căn cứ chính ≥ 20 ô, cách căn cứ địch đã biết ≥ 16 ô, tìm chỗ 3×3 trống cách quặng 3–6 ô,
+  lái MCV tới và **triển khai thành HQ**; chỗ bị chặn thì chọn chỗ khác. Sau đó để dành tiền và xây **2 máy khai thác** quanh HQ mới.
+- Mô phỏng (Hard / Insane, 4 trận trên Desert Storm, River Crossing, Snowfield): cả 4 trận AI đều mở căn cứ tiền tuyến
+  (phút 18–24) và xây 1–2 máy khai thác ở đó.
+- Lỗi tìm ra khi mô phỏng: AI tiêu tiền liên tục nên không bao giờ đủ 2500◆ cho MCV và 800◆ cho máy khai thác → thêm cơ chế để dành tiền
+  (giống khi chờ xây công trình).
+- Test: game-ai +1 (AI Hard xây MCV, triển khai cách căn cứ > 15 ô, xây máy khai thác cạnh HQ mới).
+
+### ✅ 10.5 Kiểm tra, trình duyệt, tài liệu
+- `pnpm check`: typecheck ✅, lint ✅, test **136/136** (game-data 21, game-core 101, game-ai 11, server 3) ✅, build ✅.
+- Bộ test trình duyệt mới **round10** (14 bài): Sổ tay quân đội / Chiến dịch / Profile / panel chọn unit / tên trong thông báo bằng tiếng Việt;
+  menu xây dựng phe Western chỉ có Field Hospital; bệnh viện hồi máu bộ binh; ném khói bằng phím Z + bấm chuột, hiện thời gian hồi;
+  Desert Corps xây được Oil Derrick sau Barracks.
+- Kết quả 12 bộ × 3 trình duyệt (Chrome, Edge, Firefox): **tất cả PASS** (36/36 lượt). Lần chạy đầu Edge `survival` có 1 lỗi console
+  `ERR_CONNECTION_TIMED_OUT` (tải tài nguyên mạng) dù 8/8 bài PASS → chạy lại riêng 4 lần đều 8/8 và 0 lỗi, game không phải sửa.
+- Tài liệu v0.10 đã cập nhật: CHANGELOG, README, GAMEPLAY_SYSTEMS §5m, AI_DESIGN §6h, TESTING, DEVELOPMENT_ROADMAP, PLAN_STATUS; menu chính ghi v0.10.
+
+## Tổng kết đợt 10
+- Đã xong: dịch **toàn bộ dữ liệu game** sang tiếng Việt; **công trình riêng từng phe** (Field Hospital, Howitzer Emplacement, Repair Bay,
+  Oil Derrick, Bastion); **lựu đạn khói** và **đòn chí mạng**; **AI mở căn cứ tiền tuyến bằng MCV**; AI mọi độ khó chống xe bọc thép đánh căn cứ.
+- Chất lượng: 136 unit test, 12 bộ test trình duyệt PASS trên Chrome / Edge / Firefox.
+- Còn lại (offline): nâng cấp từng unit; thời tiết / ngày đêm; độ cao địa hình, môi trường phá hủy được; đường đạn đạo thật.
+- Tạm hoãn theo yêu cầu: toàn bộ phần online và đồ họa / âm thanh thật.
+
+---
+
+## Đợt 11 — kế hoạch (chơi offline với máy)
+
+| # | Công việc | Mục PLAN | Trạng thái |
+|---|---|---|---|
+| 11.1 | **Nâng cấp từng unit**: mỗi loại unit nâng 1 cấp ở công trình sản xuất (+máu, +sát thương, áp dụng cả unit đang có); AI cũng dùng | §8 | ✅ |
+| 11.2 | **Thành thạo từng unit** trong Profile (theo số unit đã sản xuất / hạ địch qua các trận) | §14 | ✅ |
+| 11.3 | **Thời tiết / ngày đêm**: chọn khi thiết lập trận; ban đêm và mưa / bão cát giảm tầm nhìn, mưa làm chậm xe; hiệu ứng hình ảnh | §12 | ✅ |
+| 11.4 | **Đường đạn đạo thật**: pháo / tên lửa bay theo cung, ngắm đón mục tiêu đang di chuyển | §10 | ✅ |
+| 11.5 | Kiểm tra (unit test + Chrome / Edge / Firefox), tài liệu | — | ✅ |
+
+## Nhật ký đợt 11
+
+### ✅ 11.1 Nâng cấp từng unit
+- Chọn công trình sản xuất (Barracks, War Factory, Airfield) → hàng **Nâng cấp** cạnh hàng chờ: mỗi unit công trình đó đào tạo có 1 nút.
+  Nâng cấp mất 25 giây (chậm hơn khi thiếu điện), giá = 1,5 × giá unit (làm tròn 50, tối thiểu 300◆; vd. Rifleman 300◆).
+- Hiệu quả: **+20% máu tối đa, +15% sát thương** cho **mọi** unit loại đó của người chơi — cả unit đang có, unit đang ngồi trong xe /
+  bunker, và unit sản xuất sau. Bấm lại nút đang chạy để hủy (hoàn tiền); bán công trình đang nâng cấp cũng được hoàn tiền nâng cấp.
+  Mỗi công trình nâng cấp 1 loại một lúc, chạy song song với sản xuất; loại đã nâng có dấu ★.
+- AI (từ Normal): khi dư tiền và có ≥ 4 unit cùng loại có vũ khí, nâng cấp loại nhiều nhất.
+- Test: game-core +3 (giá; chỉ đúng loại unit được tăng, cả hành khách và unit mới, địch không bị ảnh hưởng; từ chối sai công trình /
+  đang nâng / đã nâng, hủy hoàn tiền), game-ai +1 (AI nâng cấp Rifleman khi có 8 lính và dư tiền).
+
+### ✅ 11.2 Thành thạo từng unit
+- Mô phỏng ghi lại theo từng loại unit: số đã sản xuất và số địch bị unit loại đó hạ. Hết trận cộng vào Profile.
+- Điểm = 1 / unit sản xuất + 2 / lần hạ địch; 5 cấp (10 / 30 / 75 / 150 / 300 điểm), hiện bằng sao ★.
+- Profile có mục **Thành thạo unit** (icon, sao, thanh tiến độ; rê chuột xem số đã sản xuất / hạ địch / điểm), sắp theo điểm.
+  Màn kết quả báo unit nào lên cấp. Danh hiệu mới **Chuyên gia vũ khí** (Weapons Expert) khi 1 unit đạt cấp 5.
+- Hồ sơ cũ (trước v0.11) tự có mục rỗng; dữ liệu hỏng / unit không tồn tại bị bỏ.
+- Test: game-core +4 (cấp theo ngưỡng; cộng dồn qua trận và báo lên cấp; danh hiệu; hồ sơ cũ / hỏng; mô phỏng đếm sản xuất và hạ địch).
+
+### ✅ 11.3 Thời tiết và ngày / đêm
+- Thiết lập trận có 2 ô mới (được nhớ cho lần sau):
+  - **Thời tiết**: Quang đãng · **Mưa** (tầm nhìn −15%, xe chậm 15%) · **Bão cát** (tầm nhìn −35%, xe chậm 5%, bộ binh chậm 10%) ·
+    **Tuyết** (tầm nhìn −10%, bộ binh chậm 15%, xe chậm 10%). Máy bay không bị chậm.
+  - **Thời gian**: Ban ngày · **Ban đêm** (tầm nhìn −30%) · **Luân phiên** (5 phút ngày → 30 giây hoàng hôn → 2 phút đêm → 30 giây bình minh).
+- Tác động lên cả sương mù chiến tranh (thấy ít hơn) lẫn tầm tự tìm mục tiêu của unit; tầm nhìn không giảm dưới 2,5 ô. Áp dụng cho cả
+  người và máy (AI chỉ thấy những gì unit của nó thấy, nên ban đêm / bão cát AI cũng "mù" như người chơi). Đội hình đi theo tốc độ
+  unit chậm nhất **sau** khi tính thời tiết.
+- Hình ảnh: màn tối xanh đậm khi đêm (đậm nhạt dần lúc hoàng hôn / bình minh), lớp màu theo thời tiết, hạt mưa xiên / bông tuyết rơi /
+  vệt cát bay ngang (số hạt theo chất lượng đồ họa Low / Medium / High). Thanh trên có ô ☀ / ☾ + biểu tượng thời tiết + giai đoạn
+  ngày (rê chuột xem % tầm nhìn).
+- Test: game-core +4 (mặc định / giá trị sai; đêm + bão cát giảm tầm nhìn có mức sàn, unit cách HQ 8 ô thấy được ban ngày nhưng bị ẩn
+  trong bão cát ban đêm; chu kỳ ngày → hoàng hôn → đêm → bình minh; mưa làm chậm xe, tuyết làm chậm bộ binh, trực thăng không đổi).
+  Kiểm tra bằng trình duyệt: mưa đêm, bão cát, tuyết luân phiên đều hiện đúng, 0 lỗi console.
+
+### ✅ 11.4 Đường đạn đạo thật
+- Pháo (Mobile Artillery, MLRS, Missile System, Howitzer) bắn **đạn bay theo cung parabol**: tốc độ ngang không đổi, độ cao đỉnh =
+  0,35 × khoảng cách (bắn càng xa cung càng cao, bay càng lâu). Bom của Bomber rơi thẳng từ trên cao, không có cung.
+- **Ngắm đón**: xạ thủ tính vị trí mục tiêu đang chạy sau thời gian bay (dựa trên vận tốc hiện tại) và bắn vào đó; mục tiêu đổi hướng /
+  dừng lại vẫn có thể né. Độ tản đạn tăng theo khoảng cách (±0,35 ô + 0,025 ô mỗi ô tầm bắn).
+- **Vùng đạn rơi**: trong lúc đạn bay, chỗ đạn sắp rơi hiện vòng elip (đỏ = đạn địch, trắng mờ = đạn ta), đậm dần khi đạn gần chạm đất —
+  người chơi có thể kéo quân ra khỏi vùng.
+- Test: game-core +3 (ngắm đón đúng vận tốc × thời gian bay, mục tiêu đứng yên thì ngắm thẳng; cung tỉ lệ khoảng cách, bom không có cung,
+  điểm rơi trong vùng tản; pháo bắn trúng xe tăng đang chạy ngang — lệch 0,7 ô thay vì ~2 ô nếu không ngắm đón). Test AI vẫn pass.
+
+### ✅ 11.5 Kiểm tra, trình duyệt, tài liệu
+- `pnpm check`: typecheck ✅, lint ✅, test **151/151** (game-data 21, game-core 115, game-ai 12, server 3) ✅, build ✅.
+- Bộ test trình duyệt mới **round11** (15 bài): Profile có mục thành thạo unit (rỗng); ô Thời tiết / Thời gian trong thiết lập trận;
+  trận mưa + đêm (tầm nhìn 59,5%, thanh trên hiện ☾ 🌧 Night); hàng Nâng cấp ở Barracks (bắt đầu, trừ tiền, hoàn thành, thông báo,
+  dấu ★, Rifleman được +15% sát thương); đạn pháo bay theo cung; thắng trận → màn kết quả báo Rifleman lên cấp thành thạo, Profile có
+  Rifleman; thiết lập được nhớ; nhãn tiếng Việt.
+- Kết quả 13 bộ × 3 trình duyệt (Chrome, Edge, Firefox): **tất cả PASS, 0 lỗi console**. Lần chạy đầu Firefox `round11` hỏng bài nhãn
+  tiếng Việt — do Firefox không đưa chữ trong ô chọn vào `innerText` (giao diện thật đã đúng tiếng Việt); sửa bài test đọc nội dung ô chọn
+  → 15/15 trên cả 3 trình duyệt. Game không phải sửa.
+- Tài liệu cập nhật v0.11: CHANGELOG, README, GAMEPLAY_SYSTEMS §5n, AI_DESIGN §6i, TESTING, DEVELOPMENT_ROADMAP, PLAN_STATUS; menu chính ghi v0.11.
+
+## Tổng kết đợt 11
+- Đã xong: **nâng cấp từng loại unit** (AI cũng dùng), **thành thạo từng unit** + danh hiệu Chuyên gia vũ khí, **thời tiết** (mưa, bão cát,
+  tuyết) và **ngày / đêm** ảnh hưởng tầm nhìn + tốc độ, **đường đạn đạo thật** (cung parabol, ngắm đón, vùng đạn rơi).
+- Chất lượng: 151 unit test, 13 bộ test trình duyệt PASS trên Chrome / Edge / Firefox.
+
+---
+
+## Đợt 12 — kế hoạch (chơi offline với máy)
+
+| # | Công việc | Mục PLAN | Trạng thái |
+|---|---|---|---|
+| 12.1 | **Độ cao địa hình**: ô đồi đi được; đứng trên đồi được +tầm nhìn, +tầm bắn, bắn từ thấp lên đồi dễ trượt; vẽ nổi khối; có trong trình sửa map và vài map | §6 | ✅ |
+| 12.2 | **Môi trường phá hủy được**: rừng / nhà dân bị pháo, bom, nổ phá thành đất trống (mở đường mới) | §6 | ✅ |
+| 12.3 | **Xoay công trình**: phím R khi đặt đổi hướng mặt trước (cửa ra quân, điểm tập kết mặc định, hình vẽ) | §5 | ✅ |
+| 12.4 | **Avatar** riêng trong Profile (bộ huy hiệu vẽ sẵn, chọn hình + màu) | §2 | ✅ |
+| 12.5 | Kiểm tra (unit test + Chrome / Edge / Firefox), tài liệu | — | ⬜ |
+
+## Nhật ký đợt 12
+
+### ✅ 12.1 Độ cao địa hình (đồi)
+- Loại ô mới **Đồi** (đi được). Unit mặt đất / công trình đứng trên đồi: **+2 ô tầm nhìn**, **+1 ô tầm bắn**. Bắn thẳng (đạn, đạn pháo xe tăng,
+  rocket) từ chỗ thấp vào mục tiêu trên đồi **trượt 25%** (đạn rơi cạnh mục tiêu). Pháo bắn cầu vồng và máy bay không bị ảnh hưởng;
+  máy bay không được cộng điểm cao. Áp dụng như nhau cho người và AI.
+- Có đồi trên **Desert Storm** (2 đồi đối xứng nhìn xuống Central Field) và trên **map ngẫu nhiên** (1–2 đồi, đối xứng; dùng luồng ngẫu nhiên
+  riêng nên các seed cũ giữ nguyên phần còn lại). Trình sửa map có cọ **Đồi (điểm cao)**; cách lưu map 1 ký tự / ô vẫn giữ, map cũ đọc bình thường.
+- Hình vẽ: mặt đồi sáng hơn, có đường đồng mức và **vách đá** ở cạnh giáp ô thấp; minimap / thiết lập trận có màu riêng.
+- Test: game-core +3 (lưu / đọc ô đồi, có đồi trên Desert Storm và map ngẫu nhiên; trên đồi +tầm nhìn +tầm bắn, trực thăng không tính;
+  bắn từ dưới lên trượt ≈ 25% qua > 60 phát). Toàn bộ test cũ vẫn pass. Kiểm tra trình duyệt: đồi hiện đúng, 0 lỗi console.
+- Chưa làm: AI chưa chủ động chiếm đồi; unit đứng trên đồi chưa được vẽ nâng cao.
+
+### ✅ 12.2 Môi trường phá hủy được
+- Ô **rừng** (260 máu) và **nhà dân / khối nhà** (700 máu) bị **vũ khí nổ lan** (pháo, đạn xe tăng có nổ lan, MLRS, tên lửa, bom) phá dần;
+  sát thương theo hệ số vũ khí với công trình, giảm dần ra rìa vùng nổ. Đạn súng không phá được.
+- Rừng cháy thành **đất cỏ có gốc cây cháy**, nhà sập thành **gạch vụn (bê tông)** — đều **đi được**, mở đường mới; đường đi của mọi unit
+  (kể cả AI) tự tính lại. Có lửa / khói khi ô bị phá (nếu nhìn thấy); minimap cập nhật.
+- Mỗi trận dùng bản sao riêng của bản đồ nên map gốc không bị đổi giữa các trận.
+- Test: game-core +3 (rừng → cỏ, nhà → bê tông, ô thành đi được, có sự kiện; map dùng chung không bị sửa; đạn súng không phá, pháo phá
+  rừng sau vài phát). Kiểm tra trình duyệt trên Forest Warfare: cây biến mất, còn gốc cháy, 0 lỗi console.
+
+### ✅ 12.3 Xoay công trình
+- Mọi công trình đều vuông nên xoay = đổi **mặt trước** (4 hướng). Khi đang đặt công trình, phím **R** (phím Rút lui, đổi được) xoay
+  1/4 vòng; bóng mờ có **mũi tên vàng** chỉ mặt trước, dòng gợi ý ghi "R: xoay".
+- Mặt trước quyết định **chỗ quân mới đi ra** (Barracks, War Factory, Airfield, HQ) và **điểm tập kết mặc định**. Hình công trình được lật
+  theo hướng (hướng sau / trái dùng chung hình với hướng trước / phải — hình placeholder).
+- AI đặt nhà sản xuất **quay mặt về giữa bản đồ** để quân ra thẳng hướng mặt trận. Hướng mặc định giữ như cũ nên các trận / test cũ không đổi.
+- Test: game-core +2 (điểm mặt trước theo 4 hướng; lệnh xây lưu hướng, giá trị sai → 0; lính ra đúng phía mặt trước với cả 4 hướng).
+  Kiểm tra trình duyệt: R xoay, mũi tên đúng, Barracks lưu hướng 1 và điểm tập kết bên phải, 0 lỗi console.
+
+### ✅ 12.4 Avatar
+- Profile có mục **Ảnh đại diện**: 8 hình (ngôi sao, khiên, quân hàm, tâm ngắm, tia chớp, xe tăng, đầu lâu, đại bàng) × 8 màu nền, vẽ bằng SVG.
+  Avatar hiện ở đầu trang Profile và trên huy hiệu hồ sơ ở menu chính; được lưu cùng hồ sơ.
+- Hồ sơ cũ tự nhận avatar mặc định (ngôi sao xanh); dữ liệu hỏng (hình / màu không có trong danh sách) trở về mặc định.
+- Test: game-core +1 (mặc định, giữ lựa chọn hợp lệ, dữ liệu hỏng / hồ sơ cũ). Kiểm tra trình duyệt: chọn đại bàng + nền đỏ, menu hiện
+  đúng, tải lại trang vẫn giữ, 0 lỗi console.

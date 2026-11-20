@@ -23,6 +23,8 @@ export type Order =
       attackMove: boolean;
       /** Patrol: the other end of the route (the unit turns around on arrival). */
       patrol?: { x: number; y: number };
+      /** Formation move: shared speed cap (the slowest unit's speed) so the group keeps its shape. */
+      speed?: number;
     }
   | { type: 'attack'; target: EntityId }
   | { type: 'hold' }
@@ -50,6 +52,8 @@ interface EntityBase {
   vision: number;
   /** Tick on which this entity last fired (for muzzle flash rendering). */
   lastFiredTick: number;
+  /** Incendiary damage still to be applied (null = not burning). */
+  burn: { ticks: number; dps: number; owner: PlayerId } | null;
 }
 
 export interface Unit extends EntityBase {
@@ -83,6 +87,19 @@ export interface Unit extends EntityBase {
   rank: number;
   /** Infantry carried inside (transports). Passengers are removed from the world while inside. */
   passengers: Unit[];
+  /** Infantry suppression (see BALANCE.suppressionThreshold). */
+  suppression: number;
+  /** Tick from which the smoke grenade can be thrown again. */
+  smokeReadyTick: number;
+}
+
+/** Smoke screen on the ground. */
+export interface SmokeCloud {
+  x: number;
+  y: number;
+  radius: number;
+  /** Tick on which it disappears. */
+  until: number;
 }
 
 export interface Building extends EntityBase {
@@ -114,6 +131,10 @@ export interface Building extends EntityBase {
   level: number;
   /** Ticks of upgrade work done, or null when not upgrading. */
   upgrading: number | null;
+  /** Front side (v0.12): 0 = +y (screen bottom-left), 1 = +x (bottom-right), 2 = −y, 3 = −x. Units leave here. */
+  facing: number;
+  /** Unit-type upgrade in progress at this producer. */
+  unitUpgrade: { unit: UnitTypeId; progress: number } | null;
 }
 
 export type Entity = Unit | Building;
@@ -134,8 +155,13 @@ export interface Projectile {
   damageMul: number;
   /** Target is an air unit (projectile is drawn at altitude). */
   air: boolean;
+  /** Critical hit (damage × BALANCE.critMultiplier). */
+  crit: boolean;
   startX: number;
   startY: number;
+  /** Ballistic shells (v0.11): peak height of the arc in tiles (0 = flat / falling bomb). The horizontal speed is
+   *  constant, so height follows a parabola 4·apex·t·(1−t) over the flight. */
+  apex: number;
 }
 
 export interface PlayerStats {
@@ -146,6 +172,8 @@ export interface PlayerStats {
   kills: number;
   creditsEarned: number;
   creditsSpent: number;
+  /** Per unit type: units produced and enemies destroyed by units of that type (unit mastery, v0.11). */
+  byUnit: Partial<Record<UnitTypeId, { built: number; kills: number }>>;
 }
 
 export interface Player {
@@ -166,6 +194,8 @@ export interface Player {
   lastUnderAttackTick: number;
   /** Completed technologies. */
   researched: ResearchId[];
+  /** Unit types upgraded at their producing building (v0.11). */
+  unitUpgrades: UnitTypeId[];
   /** Survival wave attacker: has no base, is driven by the wave system (not an AI Commander). */
   raider: boolean;
 }

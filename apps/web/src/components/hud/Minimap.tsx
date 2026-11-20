@@ -24,14 +24,19 @@ export function Minimap({ controller, size = W }: { controller: GameController; 
     base.height = mh;
     const bctx = base.getContext('2d')!;
     const img = bctx.createImageData(mw, mh);
-    tiles.forEach((t, i) => {
-      const c = TILE_COLORS[t];
-      img.data[i * 4] = (c >> 16) & 255;
-      img.data[i * 4 + 1] = (c >> 8) & 255;
-      img.data[i * 4 + 2] = c & 255;
-      img.data[i * 4 + 3] = 255;
-    });
-    bctx.putImageData(img, 0, 0);
+    const paintTerrain = () => {
+      tiles.forEach((t, i) => {
+        const c = TILE_COLORS[t];
+        img.data[i * 4] = (c >> 16) & 255;
+        img.data[i * 4 + 1] = (c >> 8) & 255;
+        img.data[i * 4 + 2] = c & 255;
+        img.data[i * 4 + 3] = 255;
+      });
+      bctx.putImageData(img, 0, 0);
+    };
+    paintTerrain();
+    // Destructible terrain: repaint when tiles change.
+    let terrainVersion = world.terrainVersion;
     const fogCanvas = document.createElement('canvas');
     fogCanvas.width = mw;
     fogCanvas.height = mh;
@@ -57,6 +62,10 @@ export function Minimap({ controller, size = W }: { controller: GameController; 
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, width, height);
       setIso();
+      if (world.terrainVersion !== terrainVersion) {
+        terrainVersion = world.terrainVersion;
+        paintTerrain();
+      }
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(base, 0, 0);
       const team = controller.team;

@@ -1,6 +1,7 @@
 import { BALANCE, RESEARCH_EFFECTS, TICK_RATE, UNITS } from '@shadow-front/game-data';
 import type { World } from '../world';
 import { orderMove } from './movement';
+import { frontOf } from '../front';
 
 /** Recomputes power produced/used per player from completed buildings. */
 export function updatePower(world: World): void {
@@ -41,11 +42,12 @@ export function updateProduction(world: World): void {
     b.queueProgress = Math.min(def.buildTime, b.queueProgress + world.powerFactor(b.owner));
     if (b.queueProgress < def.buildTime) continue;
 
-    let sx = b.x;
-    let sy = b.ty + b.h + 0.5;
+    const exit = frontOf(b, 0.5);
+    let sx = exit.x;
+    let sy = exit.y;
     if (def.category !== 'air') {
-      // Exit below the building's front edge (screen-bottom side).
-      const t = world.grid.nearestWalkable(Math.floor(b.x), b.ty + b.h, 6);
+      // Exit through the building's front edge (see Building.facing).
+      const t = world.grid.nearestWalkable(Math.floor(exit.x), Math.floor(exit.y), 6);
       if (!t) continue; // Exit blocked; retry next tick.
       sx = t.x + 0.5;
       sy = t.y + 0.5;
@@ -54,6 +56,7 @@ export function updateProduction(world: World): void {
     b.queueProgress = 0;
     const u = world.createUnit(b.owner, type, sx, sy);
     world.players[b.owner].stats.unitsBuilt++;
+    world.unitStat(b.owner, type).built++;
     world.emit({ type: 'produced', id: u.id, player: b.owner });
     orderMove(world, [u], b.rallyX, b.rallyY, true);
   }

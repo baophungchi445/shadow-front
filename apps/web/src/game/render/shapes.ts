@@ -16,7 +16,30 @@ export function teamTint(color: number, t = 0.55): number {
 export const AIR_ALTITUDE: Partial<Record<UnitTypeId, number>> = {
   'attack-helicopter': 30,
   'recon-drone': 38,
+  'fighter-jet': 46,
+  bomber: 42,
 };
+
+/** Flat polygon given in unit-local tiles (x forward), rotated by `f` and lifted `z` pixels. */
+function plate(
+  g: Phaser.GameObjects.Graphics,
+  pts: [number, number][],
+  f: number,
+  z: number,
+  color: number,
+  alpha = 1,
+): void {
+  const c = Math.cos(f);
+  const s = Math.sin(f);
+  g.fillStyle(color, alpha);
+  g.fillPoints(
+    pts.map(([a, b]) => {
+      const p = iso(a * c - b * s, a * s + b * c);
+      return { x: p.x, y: p.y - z };
+    }),
+    true,
+  );
+}
 
 // ------------------------------------------------------------------ buildings
 
@@ -209,6 +232,50 @@ export function drawBuilding(
       g.fillEllipse(c.x + 6, c.y - 18, 10, 5);
       break;
     }
+    case 'field-hospital': {
+      const t1 = drawPrism(g, w - 0.3, h - 0.3, 16, 0xe6e8e4, 3);
+      stripe(g, t1, team);
+      // Red cross on the roof.
+      const c = iso(0, 0);
+      g.fillStyle(0xd23c3c, 1);
+      g.fillRect(c.x - 3, c.y - 27, 6, 14);
+      g.fillRect(c.x - 8, c.y - 23, 16, 6);
+      break;
+    }
+    case 'repair-bay': {
+      const t1 = drawPrism(g, w - 0.2, h - 0.2, 10, mix(CONCRETE, STEEL, 0.5), 3);
+      stripe(g, t1, team);
+      // Crane arm + hook.
+      const c = iso(0, 0);
+      g.lineStyle(3, 0xe8b830, 1);
+      g.lineBetween(c.x - 12, c.y - 13, c.x - 12, c.y - 38);
+      g.lineBetween(c.x - 12, c.y - 38, c.x + 14, c.y - 32);
+      g.lineStyle(1.5, 0x2b2f33, 1);
+      g.lineBetween(c.x + 12, c.y - 32, c.x + 12, c.y - 22);
+      break;
+    }
+    case 'oil-derrick': {
+      drawPrism(g, w - 0.6, h - 0.6, 6, shade(CONCRETE, 0.85), 3);
+      // Lattice tower and a nodding pump (animated through `phase`).
+      const c = iso(0, 0);
+      g.lineStyle(2, 0x3a3f45, 1);
+      g.lineBetween(c.x - 9, c.y - 9, c.x, c.y - 44);
+      g.lineBetween(c.x + 9, c.y - 9, c.x, c.y - 44);
+      g.lineBetween(c.x - 6, c.y - 22, c.x + 6, c.y - 22);
+      const nod = Math.sin(phase * Math.PI * 2) * 5;
+      g.lineStyle(3, team, 1);
+      g.lineBetween(c.x - 16, c.y - 14 + nod, c.x + 16, c.y - 14 - nod);
+      g.fillStyle(0x1b1c1c);
+      g.fillCircle(c.x + 16, c.y - 14 - nod, 3);
+      break;
+    }
+    case 'howitzer':
+    case 'bastion': {
+      const tall = type === 'bastion' ? 18 : 9;
+      const t1 = drawPrism(g, w - 0.2, h - 0.2, tall, shade(mix(CONCRETE, team, 0.2), type === 'bastion' ? 0.8 : 0.95), 3);
+      stripe(g, t1, team);
+      break;
+    }
     case 'wall': {
       const t1 = drawPrism(g, 1, 1, 12, shade(CONCRETE, 0.95), 3);
       g.lineStyle(1, shade(CONCRETE, 0.7), 1);
@@ -255,6 +322,20 @@ export function drawTurretHead(
     const b = iso(Math.cos(angle) * len, Math.sin(angle) * len);
     g.lineStyle(3, 0x2a2e33, 1);
     g.lineBetween(a.x, a.y - 17, b.x, b.y - 17);
+  } else if (type === 'howitzer') {
+    // Long barrel raised at an angle.
+    drawBox(g, 0, 0, 0.55, 0.5, angle, 8, 10, mix(STEEL, color, 0.3));
+    const a = iso(Math.cos(angle) * 0.1, Math.sin(angle) * 0.1);
+    const b = iso(Math.cos(angle) * (0.95 - recoil * 0.2), Math.sin(angle) * (0.95 - recoil * 0.2));
+    g.lineStyle(4, 0x2a2e33, 1);
+    g.lineBetween(a.x, a.y - 16, b.x, b.y - 30);
+  } else if (type === 'bastion') {
+    drawBox(g, 0, 0, 0.7, 0.62, angle, 9, 20, mix(STEEL, color, 0.35));
+    const len = 0.95 - recoil * 0.2;
+    const a = iso(Math.cos(angle) * 0.25, Math.sin(angle) * 0.25);
+    const b = iso(Math.cos(angle) * len, Math.sin(angle) * len);
+    g.lineStyle(4.5, 0x2a2e33, 1);
+    g.lineBetween(a.x, a.y - 25, b.x, b.y - 25);
   } else if (type === 'bunker') {
     // Mounted machine gun on the roof.
     const a = iso(Math.cos(angle) * 0.05, Math.sin(angle) * 0.05);
@@ -371,6 +452,43 @@ export function drawUnitBody(
       g.fillCircle(tail.x, tail.y - z - 3, 2.5);
       break;
     }
+    case 'fighter-jet': {
+      const z = AIR_ALTITUDE['fighter-jet']!;
+      // Ground shadow of the delta wing.
+      plate(g, [[0.55, 0], [-0.4, 0.42], [-0.3, 0], [-0.4, -0.42]], f, -2, 0x000000, 0.18);
+      plate(g, [[0.15, 0], [-0.38, 0.44], [-0.38, -0.44]], f, z, dark);
+      drawBox(g, 0, 0, 0.9, 0.12, f, 4, z - 1, hull);
+      plate(g, [[-0.25, 0], [-0.42, 0.16], [-0.42, -0.16]], f, z + 4, shade(hull, 0.85));
+      const nose = iso(Math.cos(f) * 0.28, Math.sin(f) * 0.28);
+      g.fillStyle(0x9fc6d6);
+      g.fillEllipse(nose.x, nose.y - z - 4, 5, 3);
+      break;
+    }
+    case 'bomber': {
+      const z = AIR_ALTITUDE.bomber!;
+      plate(g, [[0.2, 0.75], [0.05, 0.75], [-0.1, 0], [0.05, -0.75], [0.2, -0.75], [0.3, 0]], f, -2, 0x000000, 0.2);
+      plate(g, [[0.25, 0.8], [0.08, 0.8], [-0.05, 0], [0.08, -0.8], [0.25, -0.8], [0.35, 0]], f, z, dark);
+      drawBox(g, 0, 0, 1.05, 0.2, f, 6, z - 2, hull);
+      plate(g, [[-0.4, 0], [-0.55, 0.3], [-0.55, -0.3]], f, z + 4, shade(hull, 0.85));
+      for (const side of [-0.45, 0.45]) {
+        const e = iso(Math.cos(f) * 0.18 - Math.sin(f) * side, Math.sin(f) * 0.18 + Math.cos(f) * side);
+        g.fillStyle(0x2a2d30);
+        g.fillEllipse(e.x, e.y - z, 5, 3);
+      }
+      break;
+    }
+    case 'mcv': {
+      shadow(22);
+      wheels(g, f, 0.95, 0.56);
+      drawBox(g, 0, 0, 0.98, 0.54, f, 10, 2, shade(hull, 0.92));
+      drawBox(g, -0.12, 0, 0.5, 0.46, f, 8, 12, hull);
+      // Command dish and antenna.
+      g.fillStyle(0xd9dcd2);
+      g.fillEllipse(0, -26, 12, 6);
+      g.lineStyle(1.5, 0x1e2124, 1);
+      g.lineBetween(4, -22, 4, -36);
+      break;
+    }
     case 'recon-drone': {
       const z = AIR_ALTITUDE['recon-drone']!;
       g.fillStyle(0x000000, 0.18);
@@ -391,7 +509,17 @@ export function drawUnitBody(
 }
 
 /** True when the unit has a separately rotating top part (turret or rotor). */
-const NO_TOP: UnitTypeId[] = ['rifleman', 'at-soldier', 'sniper', 'medic', 'engineer', 'recon-drone'];
+const NO_TOP: UnitTypeId[] = [
+  'rifleman',
+  'at-soldier',
+  'sniper',
+  'medic',
+  'engineer',
+  'recon-drone',
+  'fighter-jet',
+  'bomber',
+  'mcv',
+];
 
 export function hasTop(type: UnitTypeId): boolean {
   return !NO_TOP.includes(type);

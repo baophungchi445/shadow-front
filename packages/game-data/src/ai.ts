@@ -89,6 +89,8 @@ export interface PersonalityProfile {
   aggression: number;
   /** Number of defensive structures to aim for. */
   defenses: number;
+  /** Optional cap on extractors and held strategic points (Rush trades economy for early pressure). */
+  economyCap?: number;
   /** Technologies in the order this commander researches them. */
   researchOrder: ResearchId[];
 }
@@ -101,6 +103,7 @@ export const PERSONALITIES: Record<Personality, PersonalityProfile> = {
     unitWeights: { rifleman: 3, 'at-soldier': 2, 'recon-vehicle': 3, apc: 2, 'main-battle-tank': 2 },
     aggression: 0.55,
     defenses: 0,
+    economyCap: 1,
     researchOrder: ['improved-munitions', 'efficient-extraction', 'composite-armor', 'advanced-optics'],
   },
   fortress: {
@@ -116,7 +119,13 @@ export const PERSONALITIES: Record<Personality, PersonalityProfile> = {
       'research-center',
       'sam-site',
     ],
-    unitWeights: { 'at-soldier': 1, 'main-battle-tank': 3, 'heavy-tank': 4, 'mobile-artillery': 3 },
+    unitWeights: {
+      'at-soldier': 1,
+      'main-battle-tank': 3,
+      'heavy-tank': 4,
+      'mobile-artillery': 3,
+      'missile-system': 2,
+    },
     aggression: 1.6,
     defenses: 4,
     researchOrder: ['composite-armor', 'efficient-extraction', 'improved-munitions', 'advanced-optics'],
@@ -136,6 +145,8 @@ export const PERSONALITIES: Record<Personality, PersonalityProfile> = {
     unitWeights: {
       rifleman: 1,
       'attack-helicopter': 5,
+      bomber: 2,
+      'fighter-jet': 2,
       'recon-drone': 1,
       'main-battle-tank': 1,
       'at-soldier': 1,
@@ -174,6 +185,7 @@ export const PERSONALITIES: Record<Personality, PersonalityProfile> = {
       'heavy-tank': 2,
       'mobile-artillery': 1,
       'attack-helicopter': 1,
+      bomber: 1,
     },
     aggression: 1.3,
     defenses: 2,

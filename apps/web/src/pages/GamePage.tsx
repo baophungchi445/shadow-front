@@ -12,10 +12,12 @@ import { BuildPanel, CommandPanel, SelectionPanel, TeamStatus } from '../compone
 import { FullscreenButton, VolumeSlider } from './InfoPages';
 import { ObjectivesPanel } from '../components/hud/ObjectivesPanel';
 import { FpsCounter } from '../components/hud/FpsCounter';
+import { useT } from '../i18n';
 
 export function GamePage({ match }: { match: MatchConfig }) {
   const controller = useMemo(() => new GameController(match), [match]);
   const settings = useApp((s) => s.settings);
+  const tr = useT();
   const finishMatch = useApp((s) => s.finishMatch);
   const go = useApp((s) => s.go);
   const { hud, toasts, menuOpen, setHud, pushToast, setMenuOpen, reset } = useHud();
@@ -54,6 +56,14 @@ export function GamePage({ match }: { match: MatchConfig }) {
   useEffect(() => {
     controller.sfx.setVolume(settings.volume);
   }, [controller, settings.volume]);
+
+  useEffect(() => {
+    controller.formation = settings.formation;
+    controller.onFormation = (f) => useApp.getState().updateSettings({ formation: f });
+    return () => {
+      controller.onFormation = null;
+    };
+  }, [controller, settings.formation]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -113,7 +123,7 @@ export function GamePage({ match }: { match: MatchConfig }) {
                       : 'border-mil-600/60 bg-graphite-900/90 text-mil-300'
                 }`}
               >
-                {t.text}
+                {tr.msg(t.text)}
               </div>
             ))}
           </div>
@@ -129,16 +139,16 @@ export function GamePage({ match }: { match: MatchConfig }) {
       {menuOpen && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60">
           <div className="panel w-80 p-5">
-            <div className="mb-1 font-display text-2xl font-bold tracking-widest text-gray-100">PAUSED</div>
+            <div className="mb-1 font-display text-2xl font-bold tracking-widest text-gray-100">{tr('PAUSED')}</div>
             <div className="mb-4 text-xs text-gray-400">
-              Simulation is paused. Press {keyLabel(settings.keybinds.pause)} / F10 to resume.
+              {tr('Simulation is paused. Press {key} / F10 to resume.', { key: keyLabel(settings.keybinds.pause) })}
             </div>
             <div className="mb-4 text-sm">
               <VolumeSlider />
             </div>
             <div className="flex flex-col gap-2">
               <button className="btn btn-primary" onClick={() => openMenu(false)}>
-                Resume
+                {tr('Resume')}
               </button>
               <FullscreenButton />
               <button
@@ -148,10 +158,10 @@ export function GamePage({ match }: { match: MatchConfig }) {
                   controller.surrender();
                 }}
               >
-                Surrender
+                {tr('Surrender')}
               </button>
               <button className="btn" onClick={() => go('menu')}>
-                Quit to main menu
+                {tr('Quit to main menu')}
               </button>
             </div>
           </div>

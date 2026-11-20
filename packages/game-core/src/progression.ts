@@ -1,4 +1,11 @@
-import type { Difficulty, FactionId, MapId, MissionType } from '@shadow-front/shared-types';
+import type { Difficulty, FactionId, MapId, MissionType, UnitTypeId } from '@shadow-front/shared-types';
+import { FACTIONS, UNITS } from '@shadow-front/game-data';
+
+/** Units of one type: produced and enemies destroyed by them. */
+export interface UnitRecord {
+  built: number;
+  kills: number;
+}
 
 /** Facts about one finished match from the local player's point of view. */
 export interface MatchSummary {
@@ -21,6 +28,8 @@ export interface MatchSummary {
   campaignComplete: boolean;
   /** A unit of ours reached the Heroic rank during the match. */
   heroic: boolean;
+  /** Per unit type (v0.11, optional for older callers). */
+  units?: Partial<Record<UnitTypeId, UnitRecord>>;
 }
 
 export interface HistoryEntry {
@@ -63,6 +72,48 @@ export interface Profile {
   title: string;
   /** Daily / weekly challenge progress for the current period. */
   challenges: ChallengeState;
+  /** Faction mastery: XP earned while playing each faction. */
+  mastery: Partial<Record<FactionId, number>>;
+  /** Unit mastery (v0.11): lifetime units produced / kills per unit type. */
+  unitMastery: Partial<Record<UnitTypeId, UnitRecord>>;
+  /** Avatar (v0.12): glyph drawn on a coloured badge. */
+  avatar: { icon: AvatarIcon; color: number };
+}
+
+/** Avatar glyphs and badge colours offered in the Profile (v0.12). */
+export const AVATAR_ICONS = [
+  'star',
+  'shield',
+  'chevrons',
+  'crosshair',
+  'lightning',
+  'tank',
+  'skull',
+  'eagle',
+] as const;
+export type AvatarIcon = (typeof AVATAR_ICONS)[number];
+export const AVATAR_COLORS = [
+  0x5a7a3a, 0x3f6ea8, 0xa8443a, 0xc49a2c, 0x6d4fa0, 0x2f8a83, 0x8a8b86, 0x2a2d33,
+] as const;
+
+// ------------------------------------------------------------------ faction mastery
+
+/** Cumulative faction XP needed for mastery levels 1..10. */
+export const MASTERY_THRESHOLDS = [300, 800, 1500, 2400, 3500, 5000, 7000, 9500, 12500, 16000];
+export const MASTERY_MAX = MASTERY_THRESHOLDS.length;
+
+/** Mastery level (0..10) and progress toward the next level for a faction's XP. */
+export function masteryInfo(xp: number): { level: number; into: number; needed: number } {
+  let level = 0;
+  while (level < MASTERY_MAX && xp >= MASTERY_THRESHOLDS[level]) level++;
+  if (level >= MASTERY_MAX) return { level, into: 1, needed: 1 };
+  const base = level === 0 ? 0 : MASTERY_THRESHOLDS[level - 1];
+  return { level, into: xp - base, needed: MASTERY_THRESHOLDS[level] - base };
+}
+
+/** Highest mastery level over all factions. */
+export function bestMastery(p: Profile): number {
+  return Math.max(0, ...Object.values(p.mastery).map((x) => masteryInfo(x ?? 0).level));
 }
 
 export interface ChallengeState {
@@ -221,6 +272,36 @@ export function currentChallenges(state: ChallengeState, now: number): Challenge
 
 // ------------------------------------------------------------------ titles
 
+// ------------------------------------------------------------------ unit mastery (v0.11)
+
+/** Mastery points: 1 per unit produced, 2 per enemy destroyed. Cumulative points for levels 1..5. */
+export const UNIT_MASTERY_THRESHOLDS = [10, 30, 75, 150, 300];
+export const UNIT_MASTERY_MAX = UNIT_MASTERY_THRESHOLDS.length;
+
+export function unitMasteryPoints(r: UnitRecord | undefined): number {
+  return r ? r.built + 2 * r.kills : 0;
+}
+
+/** Unit mastery level (0..5) and progress toward the next level. */
+export function unitMasteryInfo(r: UnitRecord | undefined): {
+  level: number;
+  points: number;
+  into: number;
+  needed: number;
+} {
+  const points = unitMasteryPoints(r);
+  let level = 0;
+  while (level < UNIT_MASTERY_MAX && points >= UNIT_MASTERY_THRESHOLDS[level]) level++;
+  if (level >= UNIT_MASTERY_MAX) return { level, points, into: 1, needed: 1 };
+  const base = level === 0 ? 0 : UNIT_MASTERY_THRESHOLDS[level - 1];
+  return { level, points, into: points - base, needed: UNIT_MASTERY_THRESHOLDS[level] - base };
+}
+
+/** Highest unit mastery level over all unit types. */
+export function bestUnitMastery(p: Profile): number {
+  return Math.max(0, ...Object.values(p.unitMastery).map((r) => unitMasteryInfo(r).level));
+}
+
 export interface Title {
   id: string;
   name: string;
@@ -279,6 +360,24 @@ export const TITLES: Title[] = [
     requirement: 'Achievement: Master of Arms',
     unlocked: (p) => 'all-factions' in p.achievements,
   },
+  {
+    id: 'specialist',
+    name: 'Specialist',
+    requirement: 'Faction mastery 5',
+    unlocked: (p) => bestMastery(p) >= 5,
+  },
+  {
+    id: 'grandmaster',
+    name: 'Grandmaster',
+    requirement: 'Faction mastery 10',
+    unlocked: (p) => bestMastery(p) >= MASTERY_MAX,
+  },
+  {
+    id: 'weapons-expert',
+    name: 'Weapons Expert',
+    requirement: 'Unit mastery 5',
+    unlocked: (p) => bestUnitMastery(p) >= UNIT_MASTERY_MAX,
+  },
 ];
 
 export function titleName(p: Profile): string {
@@ -309,6 +408,9 @@ export function newProfile(nickname = 'Commander'): Profile {
     achievements: {},
     title: 'recruit',
     challenges: { day: '', week: '', progress: {}, done: [] },
+    mastery: {},
+    unitMastery: {},
+    avatar: { icon: 'star', color: AVATAR_COLORS[0] },
   };
 }
 
@@ -437,6 +539,10 @@ export interface MatchProgress {
   completed: Challenge[];
   /** Titles that became available with this match. */
   newTitles: Title[];
+  /** Mastery of the faction played: level before / after and XP gained. */
+  mastery: { faction: FactionId; xp: number; levelBefore: number; levelAfter: number };
+  /** Unit types whose mastery level went up in this match. */
+  unitLevelUps: { type: UnitTypeId; levelBefore: number; levelAfter: number }[];
 }
 
 /** Returns the profile updated with one match (the input is not modified). */
@@ -490,7 +596,20 @@ export function applyMatch(prev: Profile, s: MatchSummary, now: number): MatchPr
     ].slice(0, HISTORY_LIMIT),
     achievements: { ...prev.achievements },
     challenges: { ...ch, progress, done: [...ch.done, ...completed.map((c) => c.id)] },
+    // Mastery grows with the match XP (challenge rewards are not faction-specific).
+    mastery: { ...prev.mastery, [s.faction]: (prev.mastery[s.faction] ?? 0) + matchXp },
+    unitMastery: { ...prev.unitMastery },
   };
+  const unitLevelUps: MatchProgress['unitLevelUps'] = [];
+  for (const [type, r] of Object.entries(s.units ?? {}) as [UnitTypeId, UnitRecord][]) {
+    if (!(type in UNITS) || !r) continue;
+    const before = prev.unitMastery[type];
+    const after = { built: (before?.built ?? 0) + r.built, kills: (before?.kills ?? 0) + r.kills };
+    profile.unitMastery[type] = after;
+    const lb = unitMasteryInfo(before).level;
+    const la = unitMasteryInfo(after).level;
+    if (la > lb) unitLevelUps.push({ type, levelBefore: lb, levelAfter: la });
+  }
   const unlocked = ACHIEVEMENTS.filter((a) => !(a.id in profile.achievements) && a.check(profile, s));
   for (const a of unlocked) profile.achievements[a.id] = now;
   const newTitles = TITLES.filter((t) => t.unlocked(profile) && !t.unlocked(prev));
@@ -502,6 +621,13 @@ export function applyMatch(prev: Profile, s: MatchSummary, now: number): MatchPr
     unlocked,
     completed,
     newTitles,
+    mastery: {
+      faction: s.faction,
+      xp: matchXp,
+      levelBefore: masteryInfo(prev.mastery[s.faction] ?? 0).level,
+      levelAfter: masteryInfo(profile.mastery[s.faction] ?? 0).level,
+    },
+    unitLevelUps,
   };
 }
 
@@ -524,5 +650,40 @@ export function sanitizeProfile(raw: unknown): Profile {
       r.challenges && typeof r.challenges === 'object' && Array.isArray(r.challenges.done)
         ? { ...fresh.challenges, ...r.challenges, progress: { ...(r.challenges.progress ?? {}) } }
         : fresh.challenges,
+    mastery: sanitizeMastery(r.mastery, Array.isArray(r.history) ? r.history : []),
+    unitMastery: sanitizeUnitMastery(r.unitMastery),
+    avatar:
+      r.avatar &&
+      typeof r.avatar === 'object' &&
+      (AVATAR_ICONS as readonly string[]).includes(r.avatar.icon) &&
+      (AVATAR_COLORS as readonly number[]).includes(r.avatar.color)
+        ? { icon: r.avatar.icon, color: r.avatar.color }
+        : fresh.avatar,
   };
+}
+
+/** Valid unit mastery map (unknown units / bad numbers dropped; missing before v0.11). */
+function sanitizeUnitMastery(raw: unknown): Partial<Record<UnitTypeId, UnitRecord>> {
+  const out: Partial<Record<UnitTypeId, UnitRecord>> = {};
+  if (!raw || typeof raw !== 'object') return out;
+  const ok = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n) && n >= 0;
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (!(k in UNITS) || !v || typeof v !== 'object') continue;
+    const r = v as Record<string, unknown>;
+    if (ok(r.built) && ok(r.kills)) out[k as UnitTypeId] = { built: r.built, kills: r.kills };
+  }
+  return out;
+}
+
+/** Valid mastery map; profiles from before v0.8 get it rebuilt from their match history. */
+function sanitizeMastery(raw: unknown, history: HistoryEntry[]): Partial<Record<FactionId, number>> {
+  const out: Partial<Record<FactionId, number>> = {};
+  if (raw && typeof raw === 'object') {
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>))
+      if (k in FACTIONS && typeof v === 'number' && Number.isFinite(v) && v >= 0) out[k as FactionId] = v;
+    return out;
+  }
+  for (const h of history)
+    if (h && h.faction in FACTIONS && typeof h.xp === 'number') out[h.faction] = (out[h.faction] ?? 0) + h.xp;
+  return out;
 }

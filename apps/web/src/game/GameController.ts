@@ -1,4 +1,5 @@
 import type {
+  Formation,
   BuildingTypeId,
   Command,
   EntityId,
@@ -21,9 +22,10 @@ import {
   type Unit,
 } from '@shadow-front/game-core';
 import { AICommander } from '@shadow-front/game-ai';
+import { FORMATIONS, FORMATION_NAMES } from './formations';
 import { Sfx } from './audio';
 
-export type CommandMode = 'none' | 'attackMove' | 'patrol';
+export type CommandMode = 'none' | 'attackMove' | 'patrol' | 'smoke';
 
 export const GAME_SPEEDS = [0.5, 1, 2, 3] as const;
 
@@ -101,7 +103,13 @@ export class GameController {
   readonly events = new Emitter<ControllerEvents>();
   selection = new Set<EntityId>();
   placing: BuildingTypeId | null = null;
+  /** Front side of the building being placed (0..3, see Building.facing); rotated with the Retreat key. */
+  placingFacing = 0;
   commandMode: CommandMode = 'none';
+  /** Formation for group move orders (mirrors Settings.formation). */
+  formation: Formation = 'spread';
+  /** Called when the formation changes in game (hotkey / buttons) so the setting is saved. */
+  onFormation: ((f: Formation) => void) | null = null;
   paused = false;
   /** Simulation speed multiplier (offline only). */
   speed = 1;
@@ -298,6 +306,18 @@ export class GameController {
           else if (e.to === this.humanId)
             this.message(`${this.world.players[e.from].name} sent you ${e.amount} credits`, 'info');
           break;
+        case 'deployed':
+          if (e.player === this.humanId) {
+            this.message('Mobile Command Vehicle deployed: forward Headquarters unfolding', 'info');
+            this.sfx.play('built');
+          }
+          break;
+        case 'unitUpgraded':
+          if (e.player === this.humanId) {
+            this.message(`Upgrade complete: ${UNITS[e.unit].name}`, 'info');
+            this.sfx.play('built');
+          }
+          break;
         case 'upgraded':
           if (e.player === this.humanId) {
             const b = this.world.get(e.id);
@@ -358,6 +378,7 @@ export class GameController {
         waves,
         campaignMission: this.config.campaignMission ?? null,
         heroic: this.heroic,
+        units: structuredClone(me.stats.byUnit),
       },
       mapName: this.world.map.name,
       mission: this.world.mission,
@@ -470,7 +491,21 @@ export class GameController {
       x,
       y,
       attackMove,
+      formation: this.formation,
     });
+  }
+
+  setFormation(f: Formation): void {
+    this.formation = f;
+    this.onFormation?.(f);
+  }
+
+  /** Cycles spread → line → column → wedge. */
+  nextFormation(): Formation {
+    const f = FORMATIONS[(FORMATIONS.indexOf(this.formation) + 1) % FORMATIONS.length];
+    this.setFormation(f);
+    this.message(`Formation: ${FORMATION_NAMES[f]}`, 'info');
+    return f;
   }
 
   attackTarget(target: EntityId): boolean {
@@ -495,6 +530,13 @@ export class GameController {
     return this.issue({ type: 'patrol', player: this.humanId, units: units.map((u) => u.id), x, y });
   }
 
+  /** The nearest ready grenadier among the selected units throws smoke at (x, y). */
+  smokeSelected(x: number, y: number): boolean {
+    const units = this.selectedOwnUnits().filter((u) => u.def.smoke);
+    if (!units.length) return false;
+    return this.issue({ type: 'smoke', player: this.humanId, units: units.map((u) => u.id), x, y });
+  }
+
   /** Selected infantry get into a friendly transport / bunker. */
   loadInto(carrier: EntityId): boolean {
     const units = this.selectedOwnUnits().filter((u) => u.def.category === 'infantry');
@@ -507,6 +549,14 @@ export class GameController {
     for (const e of this.selected())
       if (e.owner === this.humanId && e.passengers.length)
         this.issue({ type: 'unload', player: this.humanId, carrier: e.id });
+  }
+
+  /** Deploys every selected Mobile Command Vehicle where it stands. */
+  deploySelected(): boolean {
+    let any = false;
+    for (const u of this.selectedOwnUnits())
+      if (u.def.deploysTo && this.issue({ type: 'deploy', player: this.humanId, unit: u.id })) any = true;
+    return any;
   }
 
   sendCredits(to: PlayerId, amount: number): void {
@@ -557,6 +607,14 @@ export class GameController {
     this.issue({ type: 'research', player: this.humanId, building, research });
   }
 
+  upgradeUnit(building: EntityId, unit: UnitTypeId): void {
+    this.issue({ type: 'upgradeUnit', player: this.humanId, building, unit });
+  }
+
+  cancelUnitUpgrade(building: EntityId): void {
+    this.issue({ type: 'cancelUnitUpgrade', player: this.humanId, building });
+  }
+
   cancelResearch(building: EntityId): void {
     this.issue({ type: 'cancelResearch', player: this.humanId, building });
   }
@@ -586,9 +644,22 @@ export class GameController {
     this.placing = null;
   }
 
+  /** Turns the building being placed a quarter turn (its front: exit and default rally side). */
+  rotatePlacement(): void {
+    if (!this.placing) return;
+    this.placingFacing = (this.placingFacing + 1) % 4;
+  }
+
   place(tx: number, ty: number, keepPlacing = false): boolean {
     if (!this.placing) return false;
-    const ok = this.issue({ type: 'build', player: this.humanId, building: this.placing, tx, ty });
+    const ok = this.issue({
+      type: 'build',
+      player: this.humanId,
+      building: this.placing,
+      tx,
+      ty,
+      facing: this.placingFacing,
+    });
     if (ok && !keepPlacing) this.placing = null;
     return ok;
   }

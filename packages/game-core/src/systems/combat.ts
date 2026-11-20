@@ -1,5 +1,5 @@
 import type { WeaponDef } from '@shadow-front/shared-types';
-import { BALANCE } from '@shadow-front/game-data';
+import { BALANCE, DAMAGE_TABLE } from '@shadow-front/game-data';
 import { canTarget, computeDamage, inWeaponRange, targetScore } from '../combat';
 import type { Building, Entity, Unit } from '../types';
 import type { World } from '../world';
@@ -32,14 +32,53 @@ function validTarget(world: World, s: Shooter, weapon: WeaponDef, id: number | n
   return t;
 }
 
+/**
+ * Where a ballistic shell must land to meet `t`: its position after the flight time, assuming it keeps its current
+ * velocity (two refinement passes, since the flight time depends on the aim point).
+ */
+export function leadPoint(s: { x: number; y: number }, t: Entity, speed: number): { x: number; y: number } {
+  if (t.kind !== 'unit' || !t.moving) return { x: t.x, y: t.y };
+  const vx = t.x - t.prevX;
+  const vy = t.y - t.prevY;
+  let px = t.x;
+  let py = t.y;
+  for (let i = 0; i < 2; i++) {
+    const flight = Math.hypot(px - s.x, py - s.y) / speed;
+    px = t.x + vx * flight;
+    py = t.y + vy * flight;
+  }
+  return { x: px, y: py };
+}
+
 function fire(world: World, s: Shooter, weapon: WeaponDef, t: Entity): void {
-  const homing = weapon.type !== 'artillery';
+  let homing = weapon.type !== 'artillery';
   let tx = t.x;
   let ty = t.y;
+  let apex = 0;
+  // Direct fire from low ground at a target on a hill sometimes misses: the round lands next to it.
+  if (
+    homing &&
+    !(s.kind === 'unit' && s.air) &&
+    !(t.kind === 'unit' && t.air) &&
+    world.onHill(t) &&
+    !world.onHill(s) &&
+    world.rng() < BALANCE.hillMissChance
+  ) {
+    homing = false;
+    const a = world.rng() * Math.PI * 2;
+    const off = (t.kind === 'building' ? Math.max(t.w, t.h) / 2 + 0.6 : t.radius + 0.8) + 0.2;
+    tx = t.x + Math.cos(a) * off;
+    ty = t.y + Math.sin(a) * off;
+  }
   if (!homing) {
-    // Artillery scatter: shells land near, not exactly on, the aim point.
-    tx += (world.rng() - 0.5) * 1.2;
-    ty += (world.rng() - 0.5) * 1.2;
+    // Ballistic: lead the target, then scatter around the aim point (wider at long range).
+    const aim = leadPoint(s, t, weapon.projectileSpeed);
+    const dist = Math.hypot(aim.x - s.x, aim.y - s.y);
+    const spread = BALANCE.artilleryScatterBase + dist * BALANCE.artilleryScatterPerTile;
+    tx = aim.x + (world.rng() - 0.5) * 2 * spread;
+    ty = aim.y + (world.rng() - 0.5) * 2 * spread;
+    // Aircraft drop bombs (no arc); guns lob shells.
+    apex = s.kind === 'unit' && s.air ? 0 : dist * BALANCE.ballisticApexRatio;
   }
   world.projectiles.push({
     id: world.allocId(),
@@ -54,6 +93,7 @@ function fire(world: World, s: Shooter, weapon: WeaponDef, t: Entity): void {
     ty,
     targetId: t.id,
     homing,
+    apex,
     weapon,
     damageMul:
       s.damageMul *
@@ -61,6 +101,7 @@ function fire(world: World, s: Shooter, weapon: WeaponDef, t: Entity): void {
       world.rankBonus(s) *
       (s.kind === 'building' && s.def.garrison ? s.passengers.length : 1),
     air: t.kind === 'unit' && t.air,
+    crit: world.rng() < BALANCE.critChance + (s.kind === 'unit' ? s.rank * BALANCE.critPerRank : 0),
   });
   s.cooldown = weapon.cooldown;
   s.lastFiredTick = world.tick;
@@ -71,7 +112,7 @@ function fire(world: World, s: Shooter, weapon: WeaponDef, t: Entity): void {
 function tryShoot(world: World, s: Shooter, weapon: WeaponDef, t: Entity): boolean {
   const desired = Math.atan2(t.y - s.y, t.x - s.x);
   s.turretFacing = turnToward(s.turretFacing, desired, 0.25);
-  if (!inWeaponRange(weapon, s.x, s.y, t)) return false;
+  if (!inWeaponRange(weapon, s.x, s.y, t, world.rangeBonus(s))) return false;
   if (s.kind === 'unit' && (s.def.category === 'infantry' || s.air)) s.facing = s.turretFacing;
   if (s.cooldown <= 0 && Math.abs(turnToward(s.turretFacing, desired, 10) - s.turretFacing) < 0.35)
     fire(world, s, weapon, t);
@@ -113,9 +154,9 @@ function updateUnit(world: World, u: Unit, weapon: WeaponDef): void {
   }
 
   const hold = order.type === 'hold';
-  const scanRadius = hold ? weapon.range : u.vision;
+  const scanRadius = hold ? weapon.range + world.rangeBonus(u) : world.visionOf(u);
   let t = validTarget(world, u, weapon, u.targetId);
-  if (t && hold && !inWeaponRange(weapon, u.x, u.y, t)) t = null;
+  if (t && hold && !inWeaponRange(weapon, u.x, u.y, t, world.rangeBonus(u))) t = null;
   if (!t || (world.tick + u.id) % 10 === 0) {
     const better = acquireTarget(world, u, weapon, scanRadius);
     if (better && (!t || better !== t)) t = better;
@@ -153,8 +194,9 @@ function updateBuilding(world: World, b: Building, weapon: WeaponDef): void {
     return;
   }
   let t = validTarget(world, b, weapon, b.targetId);
-  if (t && !inWeaponRange(weapon, b.x, b.y, t)) t = null;
-  if (!t || (world.tick + b.id) % 10 === 0) t = acquireTarget(world, b, weapon, weapon.range) ?? t;
+  const bonus = world.rangeBonus(b);
+  if (t && !inWeaponRange(weapon, b.x, b.y, t, bonus)) t = null;
+  if (!t || (world.tick + b.id) % 10 === 0) t = acquireTarget(world, b, weapon, weapon.range + bonus) ?? t;
   b.targetId = t ? t.id : null;
   if (t) tryShoot(world, b, weapon, t);
 }
@@ -170,7 +212,7 @@ export function updateCombat(world: World): void {
       e.cooldown = Math.max(0, e.cooldown - rate);
       updateBuilding(world, e, weapon);
     } else {
-      e.cooldown = Math.max(0, e.cooldown - 1);
+      e.cooldown = Math.max(0, e.cooldown - (world.isSuppressed(e) ? BALANCE.suppressedFireRate : 1));
       updateUnit(world, e, weapon);
     }
   }
@@ -197,7 +239,18 @@ export function updateProjectiles(world: World): void {
     }
     p.x = p.tx;
     p.y = p.ty;
-    impact(world, p.owner, p.team, p.weapon, p.damageMul, p.x, p.y, p.targetId, p.sourceId);
+    if (p.crit) world.emit({ type: 'crit', x: p.x, y: p.y });
+    impact(
+      world,
+      p.owner,
+      p.team,
+      p.weapon,
+      p.damageMul * (p.crit ? BALANCE.critMultiplier : 1),
+      p.x,
+      p.y,
+      p.targetId,
+      p.sourceId,
+    );
   }
   world.projectiles = keep;
 }
@@ -216,6 +269,8 @@ function impact(
   const splash = weapon.splash ?? 0;
   world.emit({ type: 'hit', x, y, weapon: weapon.type, splash });
   if (splash > 0) {
+    // Explosions also wreck woods and city blocks.
+    world.damageTerrain(x, y, splash, weapon.damage * damageMul * DAMAGE_TABLE[weapon.type].building);
     const victims: Entity[] = [];
     world.spatial.query(x, y, splash + 2, (e) => {
       if (e.dead || !world.areEnemies(team, e.team) || !canTarget(weapon, e)) return;
@@ -224,13 +279,18 @@ function impact(
     });
     for (const e of victims) {
       const falloff = 1 - 0.5 * Math.min(1, Math.hypot(e.x - x, e.y - y) / (splash + 0.01));
-      world.damage(e, computeDamage(weapon, damageMul, e) * falloff, owner, sourceId);
+      const dmg = computeDamage(weapon, damageMul, e) * falloff;
+      world.damage(e, dmg, owner, sourceId);
+      world.applyHitEffects(e, weapon, dmg, owner);
     }
     return;
   }
   const t = world.get(targetId);
   if (!t) return;
   const r = t.kind === 'building' ? Math.max(t.w, t.h) / 2 + 0.5 : t.radius + 0.5;
-  if (Math.hypot(t.x - x, t.y - y) <= r)
-    world.damage(t, computeDamage(weapon, damageMul, t), owner, sourceId);
+  if (Math.hypot(t.x - x, t.y - y) <= r) {
+    const dmg = computeDamage(weapon, damageMul, t);
+    world.damage(t, dmg, owner, sourceId);
+    world.applyHitEffects(t, weapon, dmg, owner);
+  }
 }

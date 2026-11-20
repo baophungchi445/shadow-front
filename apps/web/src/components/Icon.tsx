@@ -13,6 +13,10 @@ const PATHS: Partial<Record<UnitTypeId | BuildingTypeId, string>> = {
   'mobile-artillery': 'M2 15h19l-2 4H4Zm3-4h11l2 4H3Zm2-3h6v3H7Zm5 0 10-5 .6 1.2-10 5Z',
   'attack-helicopter': 'M2 6h20v1H2Zm9 1h2v2h-2Zm-3 2h9l3 3-2 2H9l-2-3Zm-6 1h6v1.6H2Zm9 6h5v1h-5Z',
   'recon-drone': 'M4 6h5v1.4H4Zm11 0h5v1.4h-5ZM6 7h1v3H6Zm11 0h1v3h-1ZM8 10h8l-1 4H9Zm3 4h2v2h-2Z',
+  'fighter-jet': 'M12 2l1.5 6 8 6v2l-8-2.5L13 19l3 2v1l-4-1-4 1v-1l3-2-.5-5.5L2 16v-2l8-6Z',
+  bomber: 'M11 3h2l1 6 9 4v2l-9-2-.5 5 3 2v1H7.5v-1l3-2-.5-5-9 2v-2l9-4Z',
+  mcv: 'M2 12h18l2 3v3H2Zm3-4h9v4H5Zm11-5h1v6h-1Zm-2 2a3 2 0 0 1 6 0ZM5 18a2 2 0 1 0 4 0Zm6 0a2 2 0 1 0 4 0Zm5 0a2 2 0 1 0 4 0Z',
+  'missile-system': 'M2 15h19l-2 4H4Zm2-4h12l2 4H3Zm3-1 11-7 1.4 1.6-11 7Zm4 1 9-5.5 1 1.5-9 5.5Z',
   sniper:
     'M10 3a2 2 0 1 1 0 4 2 2 0 0 1 0-4ZM8 8h4l1 6h-1.5l-.5 7h-2l-.5-7H7l1-6Zm4 1 10-3.5.4 1-10 3.5Zm6-2.6h1.5v2H18Z',
   medic:
@@ -32,6 +36,11 @@ const PATHS: Partial<Record<UnitTypeId | BuildingTypeId, string>> = {
   'missile-launcher': 'M5 21v-5h14v5Zm2-5 1-4h8l1 4Zm1-5 7-7 1.4 1.4-7 7Zm4 0 7-7 1.4 1.4-7 7Z',
   bunker: 'M2 21v-8l4-3h12l4 3v8Zm4-6v2h4v-2Zm8 0v2h4v-2ZM8 7h8v3H8Z',
   'sam-site': 'M5 21v-5h14v5Zm2-5 9-8 2 1.6-9 8Zm9-8 4-3 .8 1-4 3Z',
+  'field-hospital': 'M3 21V9h18v12Zm7-10v3H7v3h3v3h4v-3h3v-3h-3v-3Z',
+  howitzer: 'M4 21v-5h14v5Zm3-5 2-4h5l1 4Zm4-3 9-9 1.4 1.4-9 9Z',
+  'repair-bay': 'M3 21v-6h18v6Zm2-6V4h2v11Zm2-11 12 3-.5 1.8L7 5.8Zm10 4h1.6v5H17Z',
+  'oil-derrick': 'M5 21v-3h14v3Zm3-3L12 3l4 15h-2l-2-8-2 8Zm-6-6 18-4 .4 1.6-18 4Z',
+  bastion: 'M2 21v-9h3V9h3v3h2V9h4v3h2V9h3v3h3v9Zm8-10 10-4 .6 1.6-10 4Z',
 };
 
 export function Icon({ id, className = '' }: { id: UnitTypeId | BuildingTypeId; className?: string }) {

@@ -2,6 +2,7 @@ import type { BuildingTypeId, EntityId, ResearchId, UnitTypeId } from '@shadow-f
 import {
   BALANCE,
   BUILDABLE,
+  buildingAvailableTo,
   BUILDINGS,
   FACTIONS,
   RESEARCH,
@@ -10,6 +11,8 @@ import {
   UNITS,
   availableTo,
   researchAvailableTo,
+  UNIT_UPGRADE,
+  unitUpgradeCost,
 } from '@shadow-front/game-data';
 import type { GameController } from './GameController';
 
@@ -44,6 +47,18 @@ export interface ResearchOption {
   reason: string | null;
 }
 
+/** Per-unit-type upgrade offered at a producer (v0.11). */
+export interface UnitUpgradeOption {
+  type: UnitTypeId;
+  name: string;
+  cost: number;
+  done: boolean;
+  /** 0..1 while upgrading at the selected building, else null. */
+  progress: number | null;
+  available: boolean;
+  reason: string | null;
+}
+
 export interface QueueItem {
   type: UnitTypeId;
   progress: number;
@@ -65,6 +80,10 @@ export type SelectionInfo =
         rank: number;
         /** Transports: passengers inside / capacity (null when it cannot carry). */
         cargo: { count: number; capacity: number } | null;
+        /** Own Mobile Command Vehicle: name of the building it deploys into. */
+        deploysTo: string | null;
+        /** Own grenadier: seconds until the smoke grenade is ready (0 = ready), null = none. */
+        smokeIn: number | null;
         weapon: string;
         description: string;
       } | null;
@@ -83,6 +102,7 @@ export type SelectionInfo =
       description: string;
       queue: QueueItem[];
       options: UnitOption[];
+      unitUpgrades: UnitUpgradeOption[];
       research: ResearchOption[];
       repairing: boolean;
       damaged: boolean;
@@ -100,6 +120,8 @@ export interface HudSnapshot {
   powerProduced: number;
   powerUsed: number;
   time: number;
+  /** Weather and light (v0.11): daylight 0 (night) .. 1 (day), vision multiplier. */
+  conditions: { weather: string; dayTime: string; phase: string; daylight: number; vision: number };
   mission: string;
   mapName: string;
   paused: boolean;
@@ -164,24 +186,26 @@ export function snapshotHud(c: GameController): HudSnapshot {
 
   const constructing = new Map<BuildingTypeId, number>();
   for (const b of w.playerBuildings(pid)) if (!b.complete) constructing.set(b.type, b.progress);
-  const build: BuildOption[] = BUILDABLE.map((type) => {
-    const def = BUILDINGS[type];
-    const reqOk = w.requirementsMet(pid, def.requires);
-    const reason = !reqOk
-      ? `Requires ${def.requires.map((r) => BUILDINGS[r].name).join(', ')}`
-      : me.credits < def.cost
-        ? 'Insufficient credits'
-        : null;
-    return {
-      type,
-      name: def.name,
-      cost: def.cost,
-      power: def.power,
-      available: reason === null,
-      reason,
-      constructing: constructing.get(type) ?? null,
-    };
-  });
+  const build: BuildOption[] = BUILDABLE.filter((type) => buildingAvailableTo(type, me.faction)).map(
+    (type) => {
+      const def = BUILDINGS[type];
+      const reqOk = w.requirementsMet(pid, def.requires);
+      const reason = !reqOk
+        ? `Requires ${def.requires.map((r) => BUILDINGS[r].name).join(', ')}`
+        : me.credits < def.cost
+          ? 'Insufficient credits'
+          : null;
+      return {
+        type,
+        name: def.name,
+        cost: def.cost,
+        power: def.power,
+        available: reason === null,
+        reason,
+        constructing: constructing.get(type) ?? null,
+      };
+    },
+  );
 
   let selection: SelectionInfo = { kind: 'none' };
   const sel = c.selected();
@@ -234,6 +258,39 @@ export function snapshotHud(c: GameController): HudSnapshot {
           ? b.queue.map((t, i) => ({ type: t, progress: i === 0 ? b.queueProgress / UNITS[t].buildTime : 0 }))
           : [],
         options: own ? options : [],
+        unitUpgrades:
+          own && b.def.produces
+            ? options.map((o) => {
+                const cost = unitUpgradeCost(o.type);
+                const done = w.hasUnitUpgrade(pid, o.type);
+                const elsewhere = w
+                  .playerBuildings(pid)
+                  .some((x) => x !== b && x.unitUpgrade?.unit === o.type);
+                const reason = done
+                  ? 'Upgraded'
+                  : !b.complete
+                    ? 'Under construction'
+                    : b.unitUpgrade
+                      ? b.unitUpgrade.unit === o.type
+                        ? 'In progress'
+                        : 'Upgrade in progress'
+                      : elsewhere
+                        ? 'In progress elsewhere'
+                        : me.credits < cost
+                          ? 'Insufficient credits'
+                          : null;
+                return {
+                  type: o.type,
+                  name: o.name,
+                  cost,
+                  done,
+                  progress:
+                    b.unitUpgrade?.unit === o.type ? b.unitUpgrade.progress / UNIT_UPGRADE.time : null,
+                  available: reason === null,
+                  reason,
+                };
+              })
+            : [],
         research:
           own && b.type === 'research-center'
             ? RESEARCH_IDS.filter((id) => researchAvailableTo(id, me.faction)).map((id) => {
@@ -304,11 +361,16 @@ export function snapshotHud(c: GameController): HudSnapshot {
               owner: w.players[one.owner].name,
               hp: Math.ceil(one.hp),
               maxHp: one.maxHp,
-              order: orderLabel(one.order),
+              order: w.isSuppressed(one) ? 'Suppressed' : orderLabel(one.order),
               rank: one.rank,
               cargo: one.def.transport
                 ? { count: one.passengers.length, capacity: one.def.transport.capacity }
                 : null,
+              deploysTo: one.def.deploysTo && one.owner === pid ? BUILDINGS[one.def.deploysTo].name : null,
+              smokeIn:
+                one.def.smoke && one.owner === pid
+                  ? Math.max(0, Math.ceil((one.smokeReadyTick - w.tick) / TICK_RATE))
+                  : null,
               weapon: one.def.weapon
                 ? `${one.def.weapon.type} · ${one.def.weapon.damage} dmg · range ${one.def.weapon.range}`
                 : 'Unarmed',
@@ -324,6 +386,7 @@ export function snapshotHud(c: GameController): HudSnapshot {
     powerProduced: me.powerProduced,
     powerUsed: me.powerUsed,
     time: Math.floor(w.tick / TICK_RATE),
+    conditions: { weather: w.weather, dayTime: w.dayTime, phase: w.dayPhase(), daylight: w.daylight(), vision: w.visionMul() },
     mission: w.mission,
     mapName: w.map.name,
     paused: c.paused,

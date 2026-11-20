@@ -42,6 +42,15 @@ export class NavGrid {
     return this.terrainBlocked[i] === 0 && this.occupant[i] === 0;
   }
 
+  /** Changes a tile's terrain (destructible terrain); invalidates paths. */
+  setTerrain(tx: number, ty: number, kind: TileKind): void {
+    if (!this.inBounds(tx, ty)) return;
+    const i = this.index(tx, ty);
+    this.tiles[i] = kind;
+    this.terrainBlocked[i] = TILE_BLOCKED[kind] ? 1 : 0;
+    this.version++;
+  }
+
   terrainWalkable(tx: number, ty: number): boolean {
     return this.inBounds(tx, ty) && this.terrainBlocked[this.index(tx, ty)] === 0;
   }

@@ -14,6 +14,7 @@ export const TILE_COLORS: Record<TileKind, number> = {
   ore: 0xa98b52,
   snow: 0xdfe6ea,
   forest: 0x35512a,
+  hill: 0x9c8a5e,
 };
 
 /** Deterministic per-tile hash in [0, 1). */
@@ -118,6 +119,8 @@ export interface TerrainLayer {
   /** Burns a scorch mark into the ground texture. */
   scorch(x: number, y: number, size: number): void;
   updateOre(world: World): void;
+  /** Destructible terrain: removes the tile's trees / city block and repaints it as `kind` (v0.12). */
+  destroyTile(tx: number, ty: number, kind: TileKind): void;
 }
 
 /** Bakes the static ground into a single render texture and spawns depth-sorted terrain objects. */
@@ -183,14 +186,52 @@ export function buildTerrain(scene: Phaser.Scene, world: World): TerrainLayer {
       } else if (kind === 'concrete') {
         g.lineStyle(1, 0x6f706c, 0.5);
         g.strokePoints(d, true);
+      } else if (kind === 'hill') {
+        // High ground: lit plateau with a contour line (cliff faces are drawn in a second pass).
+        g.lineStyle(1, shade(col, 1.25), 0.45);
+        g.lineBetween(cx - 14, cy - 3, cx + 12, cy - 3);
       }
     }
   }
+  // Hill edges: cliff faces drop onto lower neighbours (drawn after every tile so they are not painted over).
+  const isHill = (x: number, y: number) =>
+    x >= 0 && y >= 0 && x < map.width && y < map.height && map.tiles[y * map.width + x] === 'hill';
+  for (let ty = 0; ty < map.height; ty++)
+    for (let tx = 0; tx < map.width; tx++) {
+      if (!isHill(tx, ty)) continue;
+      const p = worldToScreen(tx + 0.5, ty + 0.5);
+      const cx = p.x + offX;
+      const cy = p.y + offY;
+      const top = { x: cx, y: cy - 16 };
+      const right = { x: cx + 32, y: cy };
+      const bottom = { x: cx, y: cy + 16 };
+      const left = { x: cx - 32, y: cy };
+      const H = 7;
+      const col = TILE_COLORS.hill;
+      if (!isHill(tx + 1, ty)) {
+        g.fillStyle(shade(col, 0.62), 1);
+        g.fillPoints([right, bottom, { x: bottom.x, y: bottom.y + H }, { x: right.x, y: right.y + H }], true);
+      }
+      if (!isHill(tx, ty + 1)) {
+        g.fillStyle(shade(col, 0.75), 1);
+        g.fillPoints([bottom, left, { x: left.x, y: left.y + H }, { x: bottom.x, y: bottom.y + H }], true);
+      }
+      g.lineStyle(1, shade(col, 1.35), 0.6);
+      if (!isHill(tx - 1, ty)) g.lineBetween(left.x, left.y, top.x, top.y);
+      if (!isHill(tx, ty - 1)) g.lineBetween(top.x, top.y, right.x, right.y);
+    }
   // Subtle water/shore darkening.
   rt.draw(g, 0, 0);
   g.destroy();
 
-  // Depth-sorted terrain objects.
+  // Depth-sorted terrain objects (kept per tile so destructible tiles can be cleared).
+  const objects = new Map<number, Phaser.GameObjects.Image[]>();
+  const keep = (tx: number, ty: number, img: Phaser.GameObjects.Image) => {
+    const i = ty * map.width + tx;
+    const list = objects.get(i);
+    if (list) list.push(img);
+    else objects.set(i, [img]);
+  };
   for (let ty = 0; ty < map.height; ty++) {
     for (let tx = 0; tx < map.width; tx++) {
       const kind = map.tiles[ty * map.width + tx];
@@ -200,33 +241,53 @@ export function buildTerrain(scene: Phaser.Scene, world: World): TerrainLayer {
         const hi = Math.min(URBAN_HEIGHTS.length - 1, Math.floor(hv * URBAN_HEIGHTS.length));
         const ci = Math.floor(hash2(tx >> 1, ty >> 1) * URBAN_PALETTE.length);
         const hgt = URBAN_HEIGHTS[hi];
-        scene.add
-          .image(p.x, p.y, `urban-${hi}-${ci}`)
-          .setOrigin(0.5, (16 + hgt) / (32 + hgt + 2))
-          .setDepth(p.y);
+        keep(
+          tx,
+          ty,
+          scene.add
+            .image(p.x, p.y, `urban-${hi}-${ci}`)
+            .setOrigin(0.5, (16 + hgt) / (32 + hgt + 2))
+            .setDepth(p.y),
+        );
       } else if (kind === 'forest') {
         // Dense woods: one or two trees per tile.
-        scene.add
-          .image(p.x - 6 + hv * 12, p.y, `tree-${Math.floor(hv * 2)}`)
-          .setOrigin(0.5, 44 / 64)
-          .setDepth(p.y);
-        if (hv > 0.45)
+        keep(
+          tx,
+          ty,
           scene.add
-            .image(p.x + 9 - hv * 6, p.y + 4, `tree-${Math.floor(hash2(tx, ty) * 2)}`)
+            .image(p.x - 6 + hv * 12, p.y, `tree-${Math.floor(hv * 2)}`)
             .setOrigin(0.5, 44 / 64)
-            .setScale(0.8)
-            .setDepth(p.y + 4);
+            .setDepth(p.y),
+        );
+        if (hv > 0.45)
+          keep(
+            tx,
+            ty,
+            scene.add
+              .image(p.x + 9 - hv * 6, p.y + 4, `tree-${Math.floor(hash2(tx, ty) * 2)}`)
+              .setOrigin(0.5, 44 / 64)
+              .setScale(0.8)
+              .setDepth(p.y + 4),
+          );
       } else if (kind === 'rock') {
         if (urbanMap)
-          scene.add
-            .image(p.x, p.y, `tree-${Math.floor(hv * 2)}`)
-            .setOrigin(0.5, 44 / 64)
-            .setDepth(p.y);
+          keep(
+            tx,
+            ty,
+            scene.add
+              .image(p.x, p.y, `tree-${Math.floor(hv * 2)}`)
+              .setOrigin(0.5, 44 / 64)
+              .setDepth(p.y),
+          );
         else
-          scene.add
-            .image(p.x, p.y, `rock-${Math.floor(hv * 3)}`)
-            .setOrigin(0.5, 34 / 54)
-            .setDepth(p.y);
+          keep(
+            tx,
+            ty,
+            scene.add
+              .image(p.x, p.y, `rock-${Math.floor(hv * 3)}`)
+              .setOrigin(0.5, 34 / 54)
+              .setDepth(p.y),
+          );
       }
     }
   }
@@ -256,6 +317,38 @@ export function buildTerrain(scene: Phaser.Scene, world: World): TerrainLayer {
       sg.fillEllipse(s.x + offX, s.y + offY, size * 1.2, size * 0.6);
       rt.draw(sg, 0, 0);
       sg.destroy();
+    },
+    destroyTile(tx, ty, kind) {
+      for (const img of objects.get(ty * map.width + tx) ?? []) img.destroy();
+      objects.delete(ty * map.width + tx);
+      const p = worldToScreen(tx + 0.5, ty + 0.5);
+      const cx = p.x + offX;
+      const cy = p.y + offY;
+      const tg = scene.make.graphics({ x: 0, y: 0 }, false);
+      const d = [
+        { x: cx, y: cy - 16 },
+        { x: cx + 32, y: cy },
+        { x: cx, y: cy + 16 },
+        { x: cx - 32, y: cy },
+      ];
+      tg.fillStyle(shade(TILE_COLORS[kind], 0.8 + hash2(tx, ty) * 0.1));
+      tg.fillPoints(d, true);
+      // Charred stumps / rubble.
+      for (let k = 0; k < 5; k++) {
+        const a = hash2(tx * 13 + k, ty * 7);
+        const b = hash2(tx * 5, ty * 11 + k);
+        tg.fillStyle(kind === 'grass' ? 0x2a2418 : 0x55534e, 0.85);
+        tg.fillEllipse(
+          cx + (a - 0.5) * 36,
+          cy + (b - 0.5) * 16,
+          kind === 'grass' ? 4 : 6,
+          kind === 'grass' ? 3 : 4,
+        );
+      }
+      tg.fillStyle(0x1c1712, 0.3);
+      tg.fillEllipse(cx, cy, 44, 20);
+      rt.draw(tg, 0, 0);
+      tg.destroy();
     },
     updateOre(w) {
       for (const o of oreSprites) {

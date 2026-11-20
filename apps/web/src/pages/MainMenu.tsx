@@ -1,5 +1,7 @@
 import { levelInfo, titleName } from '@shadow-front/game-core';
 import { useApp } from '../stores/appStore';
+import { useT } from '../i18n';
+import { Avatar } from '../components/Avatar';
 
 function Backdrop() {
   return (
@@ -34,12 +36,14 @@ export function MainMenu() {
   const go = useApp((s) => s.go);
   const profile = useApp((s) => s.profile);
   const lvl = levelInfo(profile.xp);
+  const t = useT();
   const items: { label: string; sub: string; action: () => void; primary?: boolean }[] = [
     { label: 'Play', sub: 'Skirmish or Survival vs AI', action: () => go('skirmish'), primary: true },
     { label: 'Campaign', sub: 'Tutorial and story missions', action: () => go('campaign') },
     // Multiplayer is hidden while development focuses on local play vs AI (see docs/DEVELOPMENT_ROADMAP.md).
     { label: 'Profile', sub: 'Level, statistics, achievements', action: () => go('profile') },
     { label: 'Army', sub: 'Units, buildings & factions', action: () => go('army') },
+    { label: 'Map editor', sub: 'Draw your own battlefield', action: () => go('editor') },
     { label: 'Settings', sub: 'Camera & controls', action: () => go('settings') },
   ];
   return (
@@ -47,13 +51,13 @@ export function MainMenu() {
       <Backdrop />
       <div className="relative z-10 flex h-full flex-col justify-center px-[8%]">
         <div className="mb-1 font-display text-sm font-semibold uppercase tracking-[0.5em] text-mil-500">
-          Modern Warfare RTS
+          {t('Modern Warfare RTS')}
         </div>
         <h1 className="font-display text-7xl font-bold tracking-[0.12em] text-gray-100 drop-shadow-[0_4px_24px_rgba(0,0,0,0.6)]">
           SHADOW <span className="text-mil-500">FRONT</span>
         </h1>
         <div className="mb-10 mt-2 text-sm tracking-widest text-gray-400">
-          BUILD YOUR ARMY · COMMAND YOUR TEAM · CONQUER THE BATTLEFIELD
+          {t('BUILD YOUR ARMY · COMMAND YOUR TEAM · CONQUER THE BATTLEFIELD')}
         </div>
         <div className="flex w-80 flex-col gap-2">
           {items.map((it) => (
@@ -68,9 +72,9 @@ export function MainMenu() {
             >
               <div>
                 <div className="font-display text-xl font-bold uppercase tracking-[0.2em] text-gray-100">
-                  {it.label}
+                  {t(it.label)}
                 </div>
-                <div className="text-xs text-gray-400">{it.sub}</div>
+                <div className="text-xs text-gray-400">{t(it.sub)}</div>
               </div>
               <span className="text-mil-400 opacity-0 transition-opacity group-hover:opacity-100">▶</span>
             </button>
@@ -81,20 +85,29 @@ export function MainMenu() {
           onClick={() => go('profile')}
           data-testid="profile-badge"
         >
-          <div className="font-display text-sm font-bold tracking-wider text-gray-100">
-            {profile.nickname}{' '}
-            <span className="text-xs font-normal text-warn-400">· {titleName(profile)}</span>
-          </div>
-          <div className="text-[11px] text-gray-400">
-            Level {lvl.level} · {Object.keys(profile.achievements).length} achievements
-          </div>
-          <div className="mt-1 h-1 w-40 overflow-hidden rounded bg-graphite-700">
-            <div className="h-full bg-mil-500" style={{ width: `${(lvl.into / lvl.needed) * 100}%` }} />
+          <div className="flex items-center gap-2.5">
+            <Avatar icon={profile.avatar.icon} color={profile.avatar.color} size={38} />
+            <div>
+              <div className="font-display text-sm font-bold tracking-wider text-gray-100">
+                {profile.nickname}{' '}
+                <span className="text-xs font-normal text-warn-400">· {t(titleName(profile))}</span>
+              </div>
+              <div className="text-[11px] text-gray-400">
+                {t('Level {level} · {n} achievements', {
+                  level: lvl.level,
+                  n: Object.keys(profile.achievements).length,
+                })}
+              </div>
+              <div className="mt-1 h-1 w-40 overflow-hidden rounded bg-graphite-700">
+                <div className="h-full bg-mil-500" style={{ width: `${(lvl.into / lvl.needed) * 100}%` }} />
+              </div>
+            </div>
           </div>
         </button>
         <div className="absolute bottom-5 left-[8%] text-[11px] text-gray-600">
-          v0.7 prototype · procedural placeholder graphics & audio · offline skirmish, survival & campaign vs
-          AI
+          {t(
+            'v0.12 prototype · procedural placeholder graphics & audio · offline skirmish, survival & campaign vs AI',
+          )}
         </div>
       </div>
     </div>

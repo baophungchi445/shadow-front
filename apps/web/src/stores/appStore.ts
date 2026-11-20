@@ -1,7 +1,11 @@
 import { create } from 'zustand';
+import { FACTIONS, UNITS } from '@shadow-front/game-data';
 import type { MatchConfig } from '@shadow-front/shared-types';
 import type { MatchResult } from '../game/GameController';
+import type { Formation } from '@shadow-front/shared-types';
 import { DEFAULT_KEYS, sanitizeKeys, type HotkeyAction } from '../game/keybinds';
+import { FORMATIONS } from '../game/formations';
+import { GRAPHICS_QUALITIES, type GraphicsQuality } from '../game/render/quality';
 import {
   CAMPAIGN,
   applyMatch,
@@ -10,9 +14,19 @@ import {
   type Achievement,
   type Profile,
 } from '@shadow-front/game-core';
+import type { Language } from '../i18n';
 
 export type Screen =
-  'menu' | 'skirmish' | 'campaign' | 'profile' | 'army' | 'settings' | 'multiplayer' | 'game' | 'results';
+  | 'menu'
+  | 'skirmish'
+  | 'campaign'
+  | 'profile'
+  | 'army'
+  | 'settings'
+  | 'multiplayer'
+  | 'editor'
+  | 'game'
+  | 'results';
 
 export interface Settings {
   edgeScroll: boolean;
@@ -24,8 +38,16 @@ export interface Settings {
   musicVolume: number;
   /** Rebindable hotkeys (KeyboardEvent.code). */
   keybinds: Record<HotkeyAction, string>;
-  /** Fewer particles and no scorch marks (for slow machines). */
-  performanceMode: boolean;
+  /** Effects detail: low = few particles, no scorch marks, no anti-aliasing (slow machines). */
+  graphicsQuality: GraphicsQuality;
+  /** Mouse-wheel zoom step multiplier (0.5 – 2). */
+  zoomSpeed: number;
+  /** Middle-drag panning multiplier (0.5 – 2). */
+  panSensitivity: number;
+  /** Formation used for group move orders. */
+  formation: Formation;
+  /** UI language. */
+  language: Language;
 }
 
 const SETTINGS_KEY = 'shadow-front.settings';
@@ -38,13 +60,36 @@ function loadSettings(): Settings {
     volume: 0.6,
     musicVolume: 0.35,
     keybinds: { ...DEFAULT_KEYS },
-    performanceMode: false,
+    graphicsQuality: 'high',
+    zoomSpeed: 1,
+    panSensitivity: 1,
+    formation: 'spread',
+    language: 'en',
   };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) return defaults;
-    const stored = JSON.parse(raw) as Partial<Settings>;
-    return { ...defaults, ...stored, keybinds: sanitizeKeys(stored.keybinds) };
+    const stored = JSON.parse(raw) as Partial<Settings> & { performanceMode?: boolean };
+    // v0.7 stored a "performance mode" checkbox: it maps to low quality.
+    const quality = GRAPHICS_QUALITIES.includes(stored.graphicsQuality as GraphicsQuality)
+      ? (stored.graphicsQuality as GraphicsQuality)
+      : stored.performanceMode
+        ? 'low'
+        : defaults.graphicsQuality;
+    const clamp = (v: unknown, d: number) => (typeof v === 'number' && v >= 0.5 && v <= 2 ? v : d);
+    delete stored.performanceMode;
+    return {
+      ...defaults,
+      ...stored,
+      graphicsQuality: quality,
+      zoomSpeed: clamp(stored.zoomSpeed, 1),
+      panSensitivity: clamp(stored.panSensitivity, 1),
+      language: stored.language === 'vi' ? 'vi' : 'en',
+      keybinds: sanitizeKeys(stored.keybinds),
+      formation: FORMATIONS.includes(stored.formation as Formation)
+        ? (stored.formation as Formation)
+        : 'spread',
+    };
   } catch {
     return defaults;
   }
@@ -79,6 +124,10 @@ export interface LastProgress {
   /** Daily / weekly challenges completed by the match. */
   challenges: { title: string; reward: number; period: 'daily' | 'weekly' }[];
   newTitles: string[];
+  /** Mastery of the faction played (faction display name). */
+  mastery: { faction: string; xp: number; levelBefore: number; levelAfter: number };
+  /** Unit types whose mastery level went up (unit display name). */
+  unitLevelUps: { name: string; level: number }[];
 }
 
 /** Completed campaign mission ids (per browser). */
@@ -100,7 +149,7 @@ interface AppState {
   completedMissions: string[];
   profile: Profile;
   lastProgress: LastProgress | null;
-  updateProfile: (patch: Partial<Pick<Profile, 'nickname' | 'emblem' | 'title'>>) => void;
+  updateProfile: (patch: Partial<Pick<Profile, 'nickname' | 'emblem' | 'title' | 'avatar'>>) => void;
   resetProfile: () => void;
   go: (screen: Screen) => void;
   startMatch: (match: MatchConfig) => void;
@@ -155,6 +204,11 @@ export const useApp = create<AppState>((set, get) => ({
         unlocked: progress.unlocked.map(({ id, title, description }) => ({ id, title, description })),
         challenges: progress.completed.map(({ title, reward, period }) => ({ title, reward, period })),
         newTitles: progress.newTitles.map((t) => t.name),
+        mastery: { ...progress.mastery, faction: FACTIONS[progress.mastery.faction].name },
+        unitLevelUps: (progress.unitLevelUps ?? []).map((u) => ({
+          name: UNITS[u.type].name,
+          level: u.levelAfter,
+        })),
       },
       result,
       screen: 'results',

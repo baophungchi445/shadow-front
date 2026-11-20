@@ -29,7 +29,12 @@ Local play vs AI first (decided 2026-11-19). Online multiplayer (Phases 6–7) a
 
 Done in v0.4: Survival mode, Tutorial, Tiled importer + River Crossing.
 Done in v0.5: Campaign (4 missions), population cap option, Highland Pass.
-Done in v0.6–v0.7: offline items from `docs/PLAN.md` (see `docs/PLAN_STATUS.md`).
+Done in v0.6–v0.8: offline items from `docs/PLAN.md` (see `docs/PLAN_STATUS.md`). v0.8: AI transports / bunkers / team coordination,
+Rush balance, Fighter Jet, Bomber, Mobile Command Vehicle, formations, graphics quality, faction mastery.
+v0.9: Vietnamese / English UI, in-game map editor, Long-range Missile System, burning, suppression.
+v0.10: Vietnamese game data, faction buildings, smoke grenades, critical hits, AI forward bases (MCV).
+v0.11: per-unit-type upgrades, unit mastery, weather and day / night, ballistic artillery.
+v0.12: high ground (hills), destructible woods / city blocks, building facing, profile avatars.
 
 ## Rules
 

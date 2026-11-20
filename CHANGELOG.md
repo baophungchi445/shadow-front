@@ -1,5 +1,58 @@
 # Changelog
 
+## 0.12.0 — 2026-11-20 (offline: terrain, building facing, avatars)
+
+- **High ground**: hills give +2 vision and +1 range; direct fire from below misses a target on a hill 25% of the time. On Desert Storm,
+  random maps and in the map editor.
+- **Destructible terrain**: artillery, bombs and other explosions burn woods down and collapse city blocks into walkable rubble.
+- **Building facing**: press R while placing to turn a building; units come out of its front. The AI points its factories at the front.
+- **Avatars**: pick a glyph and a colour in the Profile; shown on the main menu.
+
+## 0.11.0 — 2026-11-20 (offline: unit upgrades, unit mastery, weather, ballistics)
+
+- **Unit upgrades**: at the Barracks / War Factory / Airfield, upgrade a unit type (+20% HP, +15% damage for every unit of that type,
+  existing ones too). The AI upgrades the unit type its army relies on.
+- **Unit mastery** in the Profile: stars per unit type from units produced and enemies destroyed; new title *Weapons Expert*.
+- **Weather and time of day** (match setup): rain, sandstorm, snow; day, night or a day / night cycle. Less vision at night and in bad
+  weather, slower ground units in rain / snow / sand; rain, snowflakes, blowing sand and darkness on screen.
+- **Ballistic artillery**: shells fly on real arcs, gunners lead moving targets, scatter grows with range, and the landing zone is marked
+  while the shell is in the air.
+
+## 0.10.0 — 2026-11-20 (offline: faction buildings, smoke, crits, AI expansion)
+
+- Vietnamese translation of all game data: unit / building / technology / faction names and descriptions, campaign and tutorial,
+  achievements, challenges and titles (names inside messages too).
+- **Faction buildings**: Field Hospital (Western, heals infantry), Howitzer Emplacement (Eastern, fixed artillery), Repair Bay
+  (Pacific, repairs vehicles / buildings), Oil Derrick (Desert, income without ore), Bastion (Iron, armored fortress).
+- **Smoke grenades** (Rifleman, Ranger, Engineer; Z then click): enemies cannot see units inside the cloud unless right next to it.
+- **Critical hits**: 8% (+3% per veterancy rank) for ×1.5 damage.
+- **AI**: Hard / Insane commanders open a forward base with a Mobile Command Vehicle after minute 10; every difficulty answers
+  armored assaults on its base with anti-armor units; AI infantry hide in smoke under defensive fire.
+
+## 0.9.0 — 2026-11-20 (offline: language, map editor, combat depth)
+
+- **Language**: Vietnamese / English UI (Settings → Language), including in-game messages and command errors.
+  Game data names (units, buildings, maps, campaign text) stay in English for now.
+- **Map editor** (main menu): paint 10 terrain kinds and ore, place 2–4 spawns and up to 8 strategic points, mirror mode for fair
+  maps, live validation with the game's own rules, save up to 20 maps in the browser and play them in any mode vs AI.
+- New unit **Long-range Missile System** (range 20, incendiary). **Incendiary** damage over time (also the Eastern MLRS) and
+  **infantry suppression** (pinned infantry move and fire slower).
+- Fix: the camera drifted left at match start when the game appeared under a motionless mouse cursor.
+
+## 0.8.0 — 2026-11-20 (offline: smarter AI, new units, formations)
+
+- **AI** uses transports and bunkers: infantry ride APCs into attacks and dismount near the fight, air-minded commanders run
+  **Transport Helicopter drop raids** on enemy extractors, defensive commanders build and man a **Bunker**.
+  **Allied AIs coordinate**: they join a teammate's attack and send help when an ally's base is assaulted.
+- **Rush balance**: every AI keeps a minimum standing army (scaled with match time and with the enemy army it has seen) before
+  spending on tech; Rush trades economy for tempo (1 extractor, 1 strategic point). Rush AI win rate in 48 simulated matches: 96% → 35%.
+- New units: **Fighter Jet** (air-to-air only), **Bomber** (drops heavy splash bombs on ground targets),
+  **Mobile Command Vehicle** (deploys into a Headquarters anywhere: forward bases).
+- **Formations**: Spread / Line / Column / Wedge for group moves (B cycles; formation groups move at the slowest unit's speed).
+- Settings: **graphics quality** Low / Medium / High (replaces performance mode), **zoom speed**, **drag-pan sensitivity**.
+- Profile: **faction mastery** levels 0–10 and two new titles (Specialist, Grandmaster).
+- Fix: attack orders on aircraft no longer leave units that cannot shoot up standing idle (they attack-move instead).
+
 ## 0.7.0 — 2026-11-19 (more of docs/PLAN.md, offline)
 
 - **Transports & garrisons**: APC carries 5 infantry, new **Transport Helicopter** carries 6; new **Bunker** for 4 infantry (fires only when occupied).

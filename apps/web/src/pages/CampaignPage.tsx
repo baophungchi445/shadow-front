@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { CAMPAIGN, missionUnlocked } from '@shadow-front/game-core';
 import { getMap } from '@shadow-front/game-data';
 import { useApp } from '../stores/appStore';
+import { useT } from '../i18n';
 
 export function CampaignPage() {
   const { go, startMatch, completedMissions, profile } = useApp();
+  const t = useT();
   const firstOpen = CAMPAIGN.find((m) => !completedMissions.includes(m.id)) ?? CAMPAIGN[0];
   const [selected, setSelected] = useState(firstOpen.id);
   const mission = CAMPAIGN.find((m) => m.id === selected) ?? CAMPAIGN[0];
@@ -16,11 +18,11 @@ export function CampaignPage() {
       <div className="panel flex max-h-full w-[980px] max-w-full flex-col overflow-auto p-6">
         <div className="mb-5 flex items-baseline justify-between">
           <div>
-            <div className="panel-title">Campaign</div>
-            <h2 className="font-display text-3xl font-bold tracking-widest text-gray-100">Operations</h2>
+            <div className="panel-title">{t('Campaign')}</div>
+            <h2 className="font-display text-3xl font-bold tracking-widest text-gray-100">{t('Operations')}</h2>
           </div>
           <button className="btn" onClick={() => go('menu')}>
-            ◀ Back
+            {t('◀ Back')}
           </button>
         </div>
 
@@ -41,19 +43,19 @@ export function CampaignPage() {
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-display text-base font-bold tracking-wider text-gray-100">
-                        {i + 1}. {m.title}
+                        {i + 1}. {t(m.title)}
                       </span>
                       <span className="text-xs">
                         {done ? (
-                          <span className="text-mil-400">✓ complete</span>
+                          <span className="text-mil-400">{t('✓ complete')}</span>
                         ) : open ? (
-                          <span className="text-warn-400">available</span>
+                          <span className="text-warn-400">{t('available')}</span>
                         ) : (
-                          <span className="text-gray-500">🔒 locked</span>
+                          <span className="text-gray-500">{t('🔒 locked')}</span>
                         )}
                       </span>
                     </div>
-                    <div className="text-xs text-gray-400">{m.subtitle}</div>
+                    <div className="text-xs text-gray-400">{t(m.subtitle)}</div>
                   </button>
                 </li>
               );
@@ -62,31 +64,34 @@ export function CampaignPage() {
 
           <div className="flex flex-col gap-3">
             <div className="font-display text-2xl font-bold tracking-wider text-gray-100">
-              {mission.title}
+              {t(mission.title)}
             </div>
             <div className="text-xs uppercase tracking-widest text-gray-500">
-              {getMap(cfg.mapId).name} · {cfg.startingCredits.toLocaleString()} credits
-              {cfg.unitCap ? ` · unit limit ${cfg.unitCap}` : ''}
+              {t('{map} · {credits} credits', {
+                map: getMap(cfg.mapId).name,
+                credits: cfg.startingCredits.toLocaleString(),
+              })}
+              {cfg.unitCap ? t(' · unit limit {n}', { n: cfg.unitCap }) : ''}
             </div>
-            <p className="text-sm leading-relaxed text-gray-300">{mission.briefing}</p>
+            <p className="text-sm leading-relaxed text-gray-300">{t(mission.briefing)}</p>
             <div>
-              <div className="panel-title mb-1">Objectives</div>
+              <div className="panel-title mb-1">{t('Objectives')}</div>
               <ul className="space-y-1 text-sm text-gray-300">
                 {mission.objectives.map((o) => (
-                  <li key={o.id}>· {o.title}</li>
+                  <li key={o.id}>· {t(o.title)}</li>
                 ))}
               </ul>
             </div>
             <div className="mt-auto flex items-center justify-end gap-3 pt-4">
               {!unlocked && (
-                <span className="text-sm text-warn-400">Complete the previous mission to unlock.</span>
+                <span className="text-sm text-warn-400">{t('Complete the previous mission to unlock.')}</span>
               )}
               <button
                 className="btn btn-primary px-8 py-2 text-base"
                 disabled={!unlocked}
                 onClick={() => startMatch(mission.config(profile.nickname, Math.floor(Math.random() * 1e9)))}
               >
-                Start mission ▶
+                {t('Start mission ▶')}
               </button>
             </div>
           </div>

@@ -8,6 +8,7 @@ import { ProfilePage } from '../pages/ProfilePage';
 import { GamePage } from '../pages/GamePage';
 import { ResultsPage } from '../pages/ResultsPage';
 import { ArmyPage, MultiplayerPage, SettingsPage } from '../pages/InfoPages';
+import { MapEditor } from '../pages/MapEditor';
 
 export function App() {
   const screen = useApp((s) => s.screen);
@@ -43,6 +44,8 @@ export function App() {
       return <SettingsPage />;
     case 'multiplayer':
       return <MultiplayerPage />;
+    case 'editor':
+      return <MapEditor />;
     case 'game':
       return match ? <GamePage key={match.seed} match={match} /> : <MainMenu />;
     case 'results':

@@ -29,9 +29,15 @@ export function edgeDistance(fromX: number, fromY: number, target: Entity): numb
   return Math.max(0, d - r);
 }
 
-export function inWeaponRange(weapon: WeaponDef, fromX: number, fromY: number, target: Entity): boolean {
+export function inWeaponRange(
+  weapon: WeaponDef,
+  fromX: number,
+  fromY: number,
+  target: Entity,
+  bonus = 0,
+): boolean {
   const d = edgeDistance(fromX, fromY, target);
-  if (d > weapon.range) return false;
+  if (d > weapon.range + bonus) return false;
   if (weapon.minRange && Math.hypot(target.x - fromX, target.y - fromY) < weapon.minRange) return false;
   return true;
 }

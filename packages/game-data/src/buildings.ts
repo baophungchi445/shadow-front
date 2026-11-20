@@ -1,4 +1,4 @@
-import type { BuildingDef, BuildingTypeId } from '@shadow-front/shared-types';
+import type { BuildingDef, BuildingTypeId, FactionId } from '@shadow-front/shared-types';
 
 export const BUILDINGS: Record<BuildingTypeId, BuildingDef> = {
   headquarters: {
@@ -255,6 +255,116 @@ export const BUILDINGS: Record<BuildingTypeId, BuildingDef> = {
     description:
       'Fortified bunker for up to 4 infantry, who fire out safely (damage grows with the garrison). Empty bunkers do not shoot.',
   },
+
+  // ---------------------------------------------------------------- v0.10 faction buildings
+  'field-hospital': {
+    id: 'field-hospital',
+    name: 'Field Hospital',
+    cost: 900,
+    buildTime: 220,
+    hp: 1400,
+    w: 2,
+    h: 2,
+    power: -20,
+    vision: 6,
+    height: 18,
+    requires: ['barracks'],
+    weapon: null,
+    support: { heals: 'infantry', rate: 5, range: 6 },
+    faction: 'western',
+    hotkey: 'H',
+    description: 'Western Alliance only. Heals every friendly infantry unit within 6 tiles.',
+  },
+  howitzer: {
+    id: 'howitzer',
+    name: 'Howitzer Emplacement',
+    cost: 1400,
+    buildTime: 280,
+    hp: 1600,
+    w: 2,
+    h: 2,
+    power: -30,
+    vision: 7,
+    height: 14,
+    requires: ['war-factory'],
+    weapon: {
+      type: 'artillery',
+      damage: 90,
+      range: 13,
+      minRange: 3,
+      cooldown: 90,
+      projectileSpeed: 0.4,
+      splash: 1.6,
+      canTargetGround: true,
+      canTargetAir: false,
+    },
+    upgrade: { cost: 600, time: 300, hp: 1.4, damage: 1.3 },
+    faction: 'eastern',
+    hotkey: 'H',
+    description: 'Eastern Legion only. Fixed heavy artillery: shells ground targets up to 13 tiles away. Cannot fire up close.',
+  },
+  'repair-bay': {
+    id: 'repair-bay',
+    name: 'Repair Bay',
+    cost: 900,
+    buildTime: 220,
+    hp: 1500,
+    w: 2,
+    h: 2,
+    power: -20,
+    vision: 6,
+    height: 12,
+    requires: ['war-factory'],
+    weapon: null,
+    support: { heals: 'mechanical', rate: 12, range: 5 },
+    faction: 'pacific',
+    hotkey: 'H',
+    description: 'Pacific Technology only. Repairs every friendly vehicle, aircraft and building within 5 tiles.',
+  },
+  'oil-derrick': {
+    id: 'oil-derrick',
+    name: 'Oil Derrick',
+    cost: 1200,
+    buildTime: 240,
+    hp: 1100,
+    w: 2,
+    h: 2,
+    power: -10,
+    vision: 5,
+    height: 30,
+    requires: ['barracks'],
+    weapon: null,
+    income: 4,
+    faction: 'desert',
+    hotkey: 'H',
+    description: 'Desert Corps only. Pumps 4 credits/s anywhere, no ore needed, never runs dry.',
+  },
+  bastion: {
+    id: 'bastion',
+    name: 'Bastion',
+    cost: 1600,
+    buildTime: 300,
+    hp: 5200,
+    w: 2,
+    h: 2,
+    power: -25,
+    vision: 9,
+    height: 20,
+    requires: ['war-factory'],
+    weapon: {
+      type: 'shell',
+      damage: 70,
+      range: 8,
+      cooldown: 40,
+      projectileSpeed: 0.8,
+      canTargetGround: true,
+      canTargetAir: false,
+    },
+    upgrade: { cost: 700, time: 320, hp: 1.4, damage: 1.3 },
+    faction: 'iron',
+    hotkey: 'H',
+    description: 'Iron Republic only. Massively armored fortress with a long-barrelled cannon.',
+  },
 };
 
 /** Buildings a player can place from the build menu (HQ is pre-placed). */
@@ -271,4 +381,20 @@ export const BUILDABLE: BuildingTypeId[] = [
   'wall',
   'missile-launcher',
   'bunker',
+  'field-hospital',
+  'howitzer',
+  'repair-bay',
+  'oil-derrick',
+  'bastion',
 ];
+
+/** True when a commander of `faction` may build `building`. */
+export function buildingAvailableTo(building: BuildingTypeId, faction: FactionId): boolean {
+  const f = BUILDINGS[building].faction;
+  return !f || f === faction;
+}
+
+/** The faction's own building, if any. */
+export function factionBuilding(faction: FactionId): BuildingTypeId | undefined {
+  return BUILDABLE.find((b) => BUILDINGS[b].faction === faction);
+}

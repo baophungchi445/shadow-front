@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import Phaser from 'phaser';
 import { BattleScene, type SceneSettings } from './scenes/BattleScene';
 import type { GameController } from './GameController';
+import { QUALITY } from './render/quality';
 
 interface Props {
   controller: GameController;
@@ -29,7 +30,8 @@ export function PhaserGame({ controller, settings }: Props) {
       parent: host.current,
       backgroundColor: '#0b0e11',
       scale: { mode: Phaser.Scale.RESIZE, width: '100%', height: '100%' },
-      render: { antialias: true, powerPreference: 'high-performance' },
+      // Anti-aliasing is fixed when the match starts (it cannot change on a live WebGL context).
+      render: { antialias: QUALITY[shared.graphicsQuality].antialias, powerPreference: 'high-performance' },
       input: { mouse: { preventDefaultWheel: true } },
       callbacks: {
         preBoot: (g) => {
@@ -39,6 +41,8 @@ export function PhaserGame({ controller, settings }: Props) {
       },
       scene: [BattleScene],
     });
+    // Development-only hook for automated browser checks.
+    if (import.meta.env.DEV) (window as unknown as { __game?: Phaser.Game }).__game = game;
     return () => {
       game.destroy(true);
     };

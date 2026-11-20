@@ -8,3 +8,4 @@ export * from './rng';
 export * from './research';
 export * from './survival';
 export * from './tiled';
+export * from './customMap';

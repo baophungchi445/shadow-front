@@ -1,5 +1,7 @@
 import type {
   BuildingTypeId,
+  DayTime,
+  Weather,
   Command,
   Difficulty,
   CommandResult,
@@ -12,6 +14,7 @@ import type {
   ResearchId,
   TeamId,
   UnitTypeId,
+  WeaponDef,
 } from '@shadow-front/shared-types';
 import {
   BALANCE,
@@ -21,20 +24,35 @@ import {
   RESEARCH_EFFECTS,
   SURVIVAL,
   UNIT_SUPPLY,
+  UNIT_UPGRADE,
+  WEATHER,
+  DAY_NIGHT,
   UNITS,
+  customMapErrors,
   getMap,
   mulberry32,
 } from '@shadow-front/game-data';
 import { NavGrid } from './grid';
 import { FogOfWar } from './fog';
 import { SpatialHash } from './spatial';
-import type { Building, ControlPoint, Entity, Flag, Player, Projectile, SurvivalState, Unit } from './types';
+import type {
+  Building,
+  ControlPoint,
+  Entity,
+  Flag,
+  Player,
+  Projectile,
+  SmokeCloud,
+  SurvivalState,
+  Unit,
+} from './types';
 import { executeCommand } from './commands';
 import { updateEconomy, updatePower, updateConstruction, updateProduction } from './systems/economy';
 import { updateMovement } from './systems/movement';
 import { updateCombat, updateProjectiles } from './systems/combat';
 import { updateControlPoints } from './systems/points';
-import { updateRepair, updateResearch, updateUpgrades } from './systems/research';
+import { frontOf } from './front';
+import { updateRepair, updateResearch, updateUnitUpgrades, updateUpgrades } from './systems/research';
 import { updateWaves } from './systems/waves';
 import { updateSupport } from './systems/support';
 import { updateBoarding } from './systems/transport';
@@ -67,12 +85,38 @@ export class World {
   readonly scores = new Map<TeamId, number>();
   /** Population cap per player (0 = unlimited). */
   readonly unitCap: number;
+  /** Active smoke screens. */
+  smokes: SmokeCloud[] = [];
   /** Survival mode state (null in other missions). */
   readonly survival: SurvivalState | null = null;
+  /** Remaining hit points of destructible tiles (forest, urban; 0 elsewhere), v0.12. */
+  readonly terrainHp: Float32Array;
+  /** Bumped whenever a tile changes (renderers refresh the minimap). */
+  terrainVersion = 0;
+  /** Weather and time of day (v0.11). */
+  readonly weather: Weather;
+  readonly dayTime: DayTime;
 
   constructor(config: MatchConfig) {
-    this.map = getMap(config.mapId, config.mapId === 'random' ? (config.mapSeed ?? config.seed) : undefined);
+    let map: MapDef;
+    if (config.mapId === 'custom') {
+      if (!config.customMap) throw new Error('Custom map missing');
+      const errors = customMapErrors(config.customMap);
+      if (errors.length) throw new Error(`Custom map is not playable: ${errors[0]}`);
+      map = config.customMap;
+    } else {
+      map = getMap(config.mapId, config.mapId === 'random' ? (config.mapSeed ?? config.seed) : undefined);
+    }
+    // Own copy of the tiles: destructible terrain changes them during the match (maps are cached / shared).
+    this.map = { ...map, tiles: map.tiles.slice() };
+    this.terrainHp = new Float32Array(this.map.tiles.length);
+    this.map.tiles.forEach((t, i) => {
+      if (t === 'forest') this.terrainHp[i] = BALANCE.forestHp;
+      else if (t === 'urban') this.terrainHp[i] = BALANCE.urbanHp;
+    });
     this.mission = config.mission;
+    this.weather = config.weather && config.weather in WEATHER ? config.weather : 'clear';
+    this.dayTime = config.dayTime === 'night' || config.dayTime === 'cycle' ? config.dayTime : 'day';
     this.unitCap = Math.max(0, Math.floor(config.unitCap ?? 0));
     this.seed = config.seed;
     this.rng = mulberry32(config.seed);
@@ -123,9 +167,11 @@ export class World {
           kills: 0,
           creditsEarned: 0,
           creditsSpent: 0,
+          byUnit: {},
         },
         lastUnderAttackTick: -1000,
         researched: [],
+        unitUpgrades: [],
         raider: false,
       });
     });
@@ -221,9 +267,11 @@ export class World {
         kills: 0,
         creditsEarned: 0,
         creditsSpent: 0,
+        byUnit: {},
       },
       lastUnderAttackTick: -1000,
       researched: [],
+      unitUpgrades: [],
       raider: true,
     });
     const entries = this.map.spawns.slice(id).map((s) => ({ x: s.tx + 1.5, y: s.ty + 1.5 }));
@@ -263,7 +311,8 @@ export class World {
         ? RESEARCH_EFFECTS.infantryHp
         : 1;
     const turbo = vehicle && this.hasResearch(owner, 'turbo-engines') ? RESEARCH_EFFECTS.vehicleSpeed : 1;
-    const hp = Math.round(def.hp * mods.unitHp * armor * medkits);
+    const drilled = this.hasUnitUpgrade(owner, type);
+    const hp = Math.round(def.hp * mods.unitHp * armor * medkits * (drilled ? UNIT_UPGRADE.hp : 1));
     const u: Unit = {
       id: this.allocId(),
       kind: 'unit',
@@ -278,7 +327,7 @@ export class World {
       hp,
       maxHp: hp,
       dead: false,
-      damageMul: mods.damage[def.category] ?? 1,
+      damageMul: (mods.damage[def.category] ?? 1) * (drilled ? UNIT_UPGRADE.damage : 1),
       cooldown: 0,
       targetId: null,
       turretFacing: Math.PI / 4,
@@ -302,12 +351,22 @@ export class World {
       xp: 0,
       rank: 0,
       passengers: [],
+      burn: null,
+      suppression: 0,
+      smokeReadyTick: 0,
     };
     this.entities.set(u.id, u);
     return u;
   }
 
-  createBuilding(owner: PlayerId, type: BuildingTypeId, tx: number, ty: number, complete: boolean): Building {
+  createBuilding(
+    owner: PlayerId,
+    type: BuildingTypeId,
+    tx: number,
+    ty: number,
+    complete: boolean,
+    facing = 0,
+  ): Building {
     const def = BUILDINGS[type];
     const p = this.players[owner];
     const mods = FACTIONS[p.faction].modifiers;
@@ -339,15 +398,21 @@ export class World {
       complete,
       queue: [],
       queueProgress: 0,
-      rallyX: tx + def.w / 2 + 1,
-      rallyY: ty + def.h + 1.5,
+      rallyX: 0,
+      rallyY: 0,
+      facing: [0, 1, 2, 3].includes(facing) ? facing : 0,
       oreTiles: [],
       research: null,
       repairing: false,
       passengers: [],
       level: 1,
       upgrading: null,
+      unitUpgrade: null,
+      burn: null,
     };
+    const front = frontOf(b, 1.5);
+    b.rallyX = front.x + (b.facing % 2 === 0 ? 1 : 0);
+    b.rallyY = front.y + (b.facing % 2 === 1 ? 1 : 0);
     if (def.needsOre) b.oreTiles = this.oreTilesNear(b.x, b.y);
     this.entities.set(b.id, b);
     this.grid.setOccupied(tx, ty, def.w, def.h, b.id);
@@ -442,6 +507,29 @@ export class World {
     this.emit({ type: 'researchComplete', player: pid, research: id });
   }
 
+  /** True when `type` has been upgraded for this player. */
+  hasUnitUpgrade(pid: PlayerId, type: UnitTypeId): boolean {
+    return this.players[pid]?.unitUpgrades.includes(type) ?? false;
+  }
+
+  /** Marks a unit-type upgrade complete and improves every existing unit of that type (passengers too). */
+  completeUnitUpgrade(pid: PlayerId, type: UnitTypeId): void {
+    const p = this.players[pid];
+    if (p.unitUpgrades.includes(type)) return;
+    p.unitUpgrades.push(type);
+    const apply = (u: Unit) => {
+      if (u.owner !== pid || u.type !== type || u.dead) return;
+      u.maxHp = Math.round(u.maxHp * UNIT_UPGRADE.hp);
+      u.hp *= UNIT_UPGRADE.hp;
+      u.damageMul *= UNIT_UPGRADE.damage;
+    };
+    for (const e of this.entities.values()) {
+      if (e.kind === 'unit') apply(e);
+      for (const q of e.passengers) apply(q);
+    }
+    this.emit({ type: 'unitUpgraded', player: pid, unit: type });
+  }
+
   // ---------------------------------------------------------------- queries
 
   get(id: EntityId | null | undefined): Entity | undefined {
@@ -495,6 +583,15 @@ export class World {
 
   isVisibleTo(team: TeamId, e: Entity): boolean {
     if (e.team === team) return true;
+    if (e.kind === 'unit' && !e.air && this.smokes.length && this.inSmoke(e.x, e.y)) {
+      // Hidden in smoke: only enemies right next to it can see it.
+      let spotted = false;
+      this.spatial.query(e.x, e.y, BALANCE.smokeSpotRange + 1, (o) => {
+        if (!spotted && !o.dead && o.team === team && o.kind === 'unit')
+          spotted = Math.hypot(o.x - e.x, o.y - e.y) <= BALANCE.smokeSpotRange;
+      });
+      if (!spotted) return false;
+    }
     if (e.kind === 'building') {
       // A building is seen if any tile of its footprint is visible.
       for (let j = e.ty; j < e.ty + e.h; j++)
@@ -515,7 +612,14 @@ export class World {
   // ---------------------------------------------------------------- placement
 
   /** Validates building placement; returns null if OK or a human-readable reason. */
-  placementError(pid: PlayerId, type: BuildingTypeId, tx: number, ty: number): string | null {
+  placementError(
+    pid: PlayerId,
+    type: BuildingTypeId,
+    tx: number,
+    ty: number,
+    /** Deployed vehicles may unfold anywhere (no distance-to-base rule). */
+    anywhere = false,
+  ): string | null {
     const def = BUILDINGS[type];
     const team = this.players[pid].team;
     for (let j = ty; j < ty + def.h; j++)
@@ -533,14 +637,14 @@ export class World {
     }
     const cx = tx + def.w / 2;
     const cy = ty + def.h / 2;
-    let near = false;
+    let near = anywhere;
     for (const b of this.playerBuildings(pid)) {
       if (Math.hypot(b.x - cx, b.y - cy) <= BALANCE.buildRadius + Math.max(b.w, b.h) / 2) {
         near = true;
         break;
       }
     }
-    if (!near) return 'Too far from your base';
+    if (!near && !anywhere) return 'Too far from your base';
     if (def.needsOre) {
       const ore = this.oreTilesNear(cx, cy).reduce((s, i) => s + this.oreRemaining[i], 0);
       if (ore <= 0) return 'Must be placed next to an ore field';
@@ -590,6 +694,27 @@ export class World {
     return e.kind === 'unit' ? 1 + e.rank * BALANCE.veterancyDamage : 1;
   }
 
+  /**
+   * Turns a deployable vehicle into its building, centred where it stands. The building starts 60% built
+   * (a short unfolding phase) and the vehicle leaves the world without counting as lost.
+   */
+  deploy(u: Unit): Building | string {
+    const type = u.def.deploysTo;
+    if (!type) return 'This unit cannot deploy';
+    const def = BUILDINGS[type];
+    const tx = Math.round(u.x - def.w / 2);
+    const ty = Math.round(u.y - def.h / 2);
+    const err = this.placementError(u.owner, type, tx, ty, true);
+    if (err) return err;
+    u.dead = true;
+    this.entities.delete(u.id);
+    const b = this.createBuilding(u.owner, type, tx, ty, false);
+    b.progress = 0.6;
+    b.hp = Math.round(b.maxHp * 0.6);
+    this.emit({ type: 'deployed', unit: u.id, building: b.id, player: u.owner, x: b.x, y: b.y });
+    return b;
+  }
+
   /** Removes a building without counting it as lost (sell / cancelled construction). */
   removeBuilding(b: Building): void {
     b.dead = true;
@@ -621,8 +746,17 @@ export class World {
       this.players[attacker].stats.kills++;
       this.destroy(target);
       const src = this.get(sourceId);
-      if (src && src.kind === 'unit') this.grantXp(src, target);
+      if (src && src.kind === 'unit') {
+        this.grantXp(src, target);
+        this.unitStat(src.owner, src.type).kills++;
+      }
     }
+  }
+
+  /** Per-unit-type statistics record of a player (created on first use). */
+  unitStat(pid: PlayerId, type: UnitTypeId): { built: number; kills: number } {
+    const by = this.players[pid].stats.byUnit;
+    return (by[type] ??= { built: 0, kills: 0 });
   }
 
   /** Capacity of a transport or bunker (0 when it carries nobody). */
@@ -711,11 +845,13 @@ export class World {
     updateResearch(this);
     updateRepair(this);
     updateUpgrades(this);
+    updateUnitUpgrades(this);
     updateSupport(this);
     updateBoarding(this);
     updateFlags(this);
     if (this.tick % 10 === 0) updateControlPoints(this);
     updateWaves(this);
+    this.updateConditions();
 
     if (this.tick % BALANCE.fogInterval === 0) this.updateFog();
     if (this.tick % 20 === 0) {
@@ -731,11 +867,148 @@ export class World {
     }
   }
 
-  updateFog(): void {
-    this.fog.beginUpdate();
+  inSmoke(x: number, y: number): boolean {
+    for (const s of this.smokes) if (Math.hypot(s.x - x, s.y - y) <= s.radius) return true;
+    return false;
+  }
+
+  /** Throws a smoke grenade from `u` to (x, y). Returns an error message or null. */
+  throwSmoke(u: Unit, x: number, y: number): string | null {
+    if (!u.def.smoke) return `${u.def.name} has no smoke grenades`;
+    if (this.tick < u.smokeReadyTick) return 'Smoke grenade not ready';
+    if (Math.hypot(x - u.x, y - u.y) > BALANCE.smokeRange)
+      return `Out of throwing range (${BALANCE.smokeRange} tiles)`;
+    u.smokeReadyTick = this.tick + BALANCE.smokeCooldown;
+    this.smokes.push({ x, y, radius: BALANCE.smokeRadius, until: this.tick + BALANCE.smokeTicks });
+    this.emit({ type: 'smoke', x, y, player: u.owner });
+    return null;
+  }
+
+  /** True when an infantry unit is pinned down by suppressive fire. */
+  isSuppressed(u: Unit): boolean {
+    return u.suppression >= BALANCE.suppressionThreshold;
+  }
+
+  /** Burning damage over time and suppression decay. */
+  private updateConditions(): void {
+    if (this.smokes.length) this.smokes = this.smokes.filter((s) => s.until > this.tick);
     for (const e of this.entities.values()) {
       if (e.dead) continue;
-      this.fog.reveal(e.team, e.x, e.y, e.vision);
+      if (e.kind === 'unit' && e.suppression > 0)
+        e.suppression = Math.max(0, e.suppression - BALANCE.suppressionDecay);
+      const b = e.burn;
+      if (!b) continue;
+      b.ticks--;
+      if (b.ticks % 10 === 0) this.damage(e, b.dps / 2, b.owner);
+      if (b.ticks <= 0 && !e.dead) e.burn = null;
+    }
+  }
+
+  /** Called on a projectile hit: incendiary burn and infantry suppression. */
+  applyHitEffects(target: Entity, weapon: WeaponDef, damage: number, owner: PlayerId): void {
+    if (target.dead) return;
+    if (weapon.burn && !(target.kind === 'unit' && target.air)) {
+      const ticks = Math.round(weapon.burn.seconds * 20);
+      // Re-ignition refreshes the duration and keeps the stronger fire.
+      if (!target.burn || target.burn.ticks < ticks || target.burn.dps < weapon.burn.dps)
+        target.burn = { ticks, dps: Math.max(weapon.burn.dps, target.burn?.dps ?? 0), owner };
+    }
+    if (
+      target.kind === 'unit' &&
+      target.def.category === 'infantry' &&
+      (weapon.type === 'bullet' || weapon.type === 'artillery')
+    )
+      target.suppression = Math.min(BALANCE.suppressionMax, target.suppression + damage);
+  }
+
+  /** Daylight 0 (full night) .. 1 (full day). */
+  daylight(): number {
+    if (this.dayTime === 'day') return 1;
+    if (this.dayTime === 'night') return 0;
+    const c = DAY_NIGHT;
+    const period = c.dayTicks + c.duskTicks + c.nightTicks + c.dawnTicks;
+    const t = this.tick % period;
+    if (t < c.dayTicks) return 1;
+    if (t < c.dayTicks + c.duskTicks) return 1 - (t - c.dayTicks) / c.duskTicks;
+    if (t < c.dayTicks + c.duskTicks + c.nightTicks) return 0;
+    return (t - c.dayTicks - c.duskTicks - c.nightTicks) / c.dawnTicks;
+  }
+
+  /** Phase of the day for display. */
+  dayPhase(): 'day' | 'dusk' | 'night' | 'dawn' {
+    const l = this.daylight();
+    if (l >= 1) return 'day';
+    if (l <= 0) return 'night';
+    const c = DAY_NIGHT;
+    const t = this.tick % (c.dayTicks + c.duskTicks + c.nightTicks + c.dawnTicks);
+    return t < c.dayTicks + c.duskTicks ? 'dusk' : 'dawn';
+  }
+
+  /** Vision multiplier from weather and darkness. */
+  visionMul(): number {
+    const night = DAY_NIGHT.nightVision + (1 - DAY_NIGHT.nightVision) * this.daylight();
+    return WEATHER[this.weather].vision * night;
+  }
+
+  /**
+   * Explosive damage to destructible terrain (v0.12) within `radius` of (x, y): woods burn down to grass, city blocks
+   * collapse into walkable rubble (concrete). Opens new paths.
+   */
+  damageTerrain(x: number, y: number, radius: number, amount: number): void {
+    const R = Math.ceil(radius + 1);
+    const cx = Math.floor(x);
+    const cy = Math.floor(y);
+    for (let j = -R; j <= R; j++)
+      for (let i = -R; i <= R; i++) {
+        const tx = cx + i;
+        const ty = cy + j;
+        if (!this.grid.inBounds(tx, ty)) continue;
+        const idx = this.grid.index(tx, ty);
+        if (this.terrainHp[idx] <= 0) continue;
+        const d = Math.hypot(tx + 0.5 - x, ty + 0.5 - y);
+        if (d > radius + 0.5) continue;
+        this.terrainHp[idx] -= amount * (1 - 0.5 * Math.min(1, d / (radius + 0.5)));
+        if (this.terrainHp[idx] > 0) continue;
+        this.terrainHp[idx] = 0;
+        const was = this.map.tiles[idx];
+        const kind = was === 'forest' ? 'grass' : 'concrete';
+        this.map.tiles[idx] = kind;
+        this.grid.setTerrain(tx, ty, kind);
+        this.terrainVersion++;
+        this.emit({ type: 'terrainDestroyed', tx, ty, was, kind });
+      }
+  }
+
+  /** True when a ground unit or a building stands on a hill tile (high ground, v0.12). */
+  onHill(e: Entity): boolean {
+    if (e.kind === 'unit' && e.air) return false;
+    return this.grid.tile(Math.floor(e.x), Math.floor(e.y)) === 'hill';
+  }
+
+  /** Extra weapon range from high ground. */
+  rangeBonus(e: Entity): number {
+    return this.onHill(e) ? BALANCE.hillRange : 0;
+  }
+
+  /** Effective vision radius of an entity right now (weather, darkness, high ground). */
+  visionOf(e: Entity, mul = this.visionMul()): number {
+    const base = e.vision + (this.onHill(e) ? BALANCE.hillVision : 0);
+    return Math.max(Math.min(base, DAY_NIGHT.minVision), base * mul);
+  }
+
+  /** Movement multiplier from weather (aircraft are unaffected). */
+  weatherSpeed(u: Unit): number {
+    if (u.air) return 1;
+    const w = WEATHER[this.weather];
+    return u.def.category === 'infantry' ? w.infantrySpeed : w.vehicleSpeed;
+  }
+
+  updateFog(): void {
+    this.fog.beginUpdate();
+    const mul = this.visionMul();
+    for (const e of this.entities.values()) {
+      if (e.dead) continue;
+      this.fog.reveal(e.team, e.x, e.y, this.visionOf(e, mul));
     }
     for (const pt of this.points)
       if (pt.team !== null) this.fog.reveal(pt.team, pt.x, pt.y, BALANCE.pointVision);
@@ -795,3 +1068,4 @@ export class World {
     }
   }
 }
+

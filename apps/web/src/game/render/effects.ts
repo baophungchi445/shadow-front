@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { QUALITY, type GraphicsQuality } from './quality';
 
 type Kind = 'fire' | 'smoke' | 'flash' | 'spark' | 'ring' | 'debris' | 'marker';
 
@@ -51,18 +52,19 @@ export class Effects {
     this.add = scene.add.graphics().setDepth(20001).setBlendMode(Phaser.BlendModes.ADD);
   }
 
-  /** Performance mode: drop most smoke / debris and cap the particle count lower. */
-  lowDetail = false;
+  /** Graphics quality: particle cap and how much optional smoke / debris is kept. */
+  quality: GraphicsQuality = 'high';
   private skip = 0;
 
   private push(p: Omit<Particle, 'max' | 'img'>): void {
-    if (this.particles.length > (this.lowDetail ? 350 : 1400)) return;
+    const q = QUALITY[this.quality];
+    if (this.particles.length > q.particles) return;
     if (
-      this.lowDetail &&
+      q.keepEvery > 1 &&
       p.kind !== 'ring' &&
       p.kind !== 'marker' &&
       p.kind !== 'flash' &&
-      ++this.skip % 3 !== 0
+      ++this.skip % q.keepEvery !== 0
     )
       return;
     let img: Phaser.GameObjects.Image | null = null;
@@ -172,6 +174,20 @@ export class Effects {
     });
     if (dark && this.rnd() < 0.5)
       this.push({ kind: 'fire', x, y: y + 2, vx: 0, vy: -0.4, life: 14, size: 5, color: 0xff7a22 });
+  }
+
+  /** Small licking flames on a burning (incendiary) target. */
+  flames(x: number, y: number, spread: number): void {
+    this.push({
+      kind: 'fire',
+      x: x + (this.rnd() - 0.5) * spread,
+      y: y + (this.rnd() - 0.5) * spread * 0.4,
+      vx: 0,
+      vy: -0.5 - this.rnd() * 0.3,
+      life: 12 + this.rnd() * 8,
+      size: 3 + this.rnd() * 3,
+      color: this.rnd() < 0.5 ? 0xff7a22 : 0xffb43a,
+    });
   }
 
   trail(x: number, y: number): void {
