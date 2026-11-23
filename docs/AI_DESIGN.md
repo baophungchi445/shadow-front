@@ -216,6 +216,16 @@ AI already looked (an MCV base) is found. Units flagged `guard` (mission ambushe
   ("… remembers your play style: …"). AI-only matches ignore it. Settings shows the remembered habits and a Forget
   button; resetting the profile also forgets.
 
+## 6p. v0.18 — mirror fairness
+
+A mirror test (both commanders on the same random stream and the same think tick, `thinkOffset = 0`) compares each
+side's state with the other side's turned 180° every tick; the first difference points at code that depends on
+absolute directions. Rules that came out of it: scans that break ties (placement rings, `nearestWalkable`,
+`spreadTiles`) run mirrored per map quadrant; rounding to tiles is done in the mirrored frame; random jitter and
+rally points are relative to the direction of the map centre; equally far scouting targets are ordered relative to
+the own corner; a strategic point on a centre tile sits exactly on the map centre. Remaining divergence comes from
+units being updated one after another (player 0 first), which is not systematic.
+
 ## 7. Acceptance criteria
 
 - AI builds Power Plant, Extractor, Barracks, War Factory by itself.

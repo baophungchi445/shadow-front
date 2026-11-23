@@ -26,13 +26,16 @@ export function findPlacement(
   maxRadius = 12,
 ): { tx: number; ty: number } | null {
   const def = BUILDINGS[type];
-  const ox = Math.floor(cx - def.w / 2);
-  const oy = Math.floor(cy - def.h / 2);
+  const W = world.map.width;
+  const H = world.map.height;
   // The ring is scanned from the map-centre side first, mirrored per quadrant, so every spawn corner gets the same
   // layout. (A fixed top-left-first scan pushed the north-west base into its corner and gave the south-east spawn a
   // large edge in AI-vs-AI matches — v0.16.)
-  const sx = cx < world.map.width / 2 ? -1 : 1;
-  const sy = cy < world.map.height / 2 ? -1 : 1;
+  const sx = cx < W / 2 ? -1 : 1;
+  const sy = cy < H / 2 ? -1 : 1;
+  // The origin is rounded in the mirrored frame too: floor() of a mirrored coordinate is one tile off (v0.18).
+  const ox = sx < 0 ? Math.floor(cx - def.w / 2) : W - def.w - Math.floor(W - cx - def.w / 2);
+  const oy = sy < 0 ? Math.floor(cy - def.h / 2) : H - def.h - Math.floor(H - cy - def.h / 2);
   for (let r = 0; r <= maxRadius; r++) {
     for (let j = -r; j <= r; j++)
       for (let i = -r; i <= r; i++) {

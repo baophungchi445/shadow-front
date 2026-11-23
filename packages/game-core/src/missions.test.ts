@@ -151,11 +151,12 @@ describe('campaign', () => {
     expect(t.finished).toBe(true);
   });
 
-  it('Shadow Front: 2 vs 2 against Hard (adaptive) commanders; all points + both HQs (v0.17)', () => {
+  it('Shadow Front: 2 vs 2 against adaptive commanders; all points + both HQs (v0.17)', () => {
     const m = getMission('shadow-front')!;
     const cfg = m.config('Tester', 4);
     expect(cfg.mission).toBe('decapitation');
-    expect(cfg.slots.filter((s) => s.team === 1).every((s) => s.difficulty === 'hard')).toBe(true);
+    // One Hard commander (reads your style) and one Normal (learns from its attacks) — tuned with simulations.
+    expect(cfg.slots.filter((s) => s.team === 1).map((s) => s.difficulty)).toEqual(['hard', 'normal']);
     expect(cfg.slots.filter((s) => s.team === 0).length).toBe(2);
     const w = new World(cfg);
     const t = missionTracker(m);

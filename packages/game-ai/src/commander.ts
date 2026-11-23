@@ -103,6 +103,8 @@ export class AICommander {
   private threatArmor = 0;
   private scoutId: number | null = null;
   private scoutTargets: { x: number; y: number }[] = [];
+  /** Commanders think on different ticks (spreads the CPU cost); tests may align them. */
+  thinkOffset: number;
   /** Next scouting target to re-check once all of them are explored (v0.17). */
   private patrolIdx = 0;
   private squads: Squad[] = [];
@@ -165,13 +167,19 @@ export class AICommander {
     this.diff = DIFFICULTY[p.difficulty ?? 'normal'];
     this.pers = PERSONALITIES[p.personality ?? 'warlord'];
     this.adapt = new Adaptation(p.difficulty ?? 'normal');
+    this.thinkOffset = playerId * 3;
     this.rnd = mulberry32((world.seed ^ 0x5eed) + playerId * 7919);
     // Spawn locations are public map knowledge (like reading the map before a match).
     const own = world.map.spawns[p.spawnIndex];
     this.scoutTargets = world.map.spawns
       .filter((s) => s !== own)
       .map((s) => ({ x: s.tx + 1.5, y: s.ty + 1.5 }))
-      .sort((a, b) => Math.hypot(a.x - own.tx, a.y - own.ty) - Math.hypot(b.x - own.tx, b.y - own.ty));
+      .sort(
+        (a, b) =>
+          Math.hypot(a.x - own.tx, a.y - own.ty) - Math.hypot(b.x - own.tx, b.y - own.ty) ||
+          // Equally far spawns: prefer the one along our corner's x direction (mirrored per corner, v0.18).
+          (b.x - a.x) * (own.tx < world.map.width / 2 ? 1 : -1),
+      );
     // v0.17: then the strategic points and the map centre — an enemy may build away from any spawn
     // (a Mobile Command Vehicle base, the Iron Convoy mission).
     for (const pt of world.points) this.scoutTargets.push({ x: pt.x, y: pt.y });
@@ -190,7 +198,7 @@ export class AICommander {
   /** Call once per simulation tick. Decisions run every `thinkInterval` ticks. */
   update(): void {
     if (this.player.defeated || this.world.winningTeam !== null) return;
-    if ((this.world.tick + this.playerId * 3) % this.diff.thinkInterval !== 0) return;
+    if ((this.world.tick + this.thinkOffset) % this.diff.thinkInterval !== 0) return;
     this.perceive();
     this.manageBase();
     this.manageProduction();
@@ -514,12 +522,15 @@ export class AICommander {
       const toward = BUILDINGS[type].weapon ? 5 : 0;
       const dx = Math.sign(w.map.width / 2 - hq.x) * toward;
       const dy = Math.sign(w.map.height / 2 - hq.y) * toward;
+      // The random jitter is mirrored per quadrant too (same draws → mirrored spots, v0.18).
+      const jx = Math.sign(w.map.width / 2 - hq.x) || 1;
+      const jy = Math.sign(w.map.height / 2 - hq.y) || 1;
       spot = findPlacement(
         w,
         this.playerId,
         type,
-        hq.x + dx + (this.rnd() - 0.5) * 2,
-        hq.y + dy + (this.rnd() - 0.5) * 2,
+        hq.x + dx + jx * (this.rnd() - 0.5) * 2,
+        hq.y + dy + jy * (this.rnd() - 0.5) * 2,
       );
     }
     if (!spot) return;

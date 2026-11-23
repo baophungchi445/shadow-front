@@ -27,7 +27,7 @@ const pointHeld = (w: World, pid: PlayerId, name: string) =>
   w.points.some((pt) => pt.name === name && pt.team === w.players[pid].team);
 
 /** Iron Convoy: the forward base site (Frozen Crossroads, the middle of Snowfield). */
-export const CONVOY_SITE = { x: 31.5, y: 31.5, radius: 7 };
+export const CONVOY_SITE = { x: 32, y: 32, radius: 7 };
 /** Iron Convoy: how long the forward base must stand (5 minutes). */
 export const CONVOY_HOLD_TICKS = 5 * 60 * 20;
 const forwardBase = (w: World, pid: PlayerId) =>
@@ -420,7 +420,7 @@ export const CAMPAIGN: MissionDef[] = [
           name: 'Black Sun',
           faction: 'desert',
           team: 1,
-          difficulty: 'hard',
+          difficulty: 'normal',
           personality: 'eagle',
         },
       ],

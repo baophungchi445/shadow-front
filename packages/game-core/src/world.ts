@@ -188,11 +188,15 @@ export class World {
 
     this.fog = new FogOfWar(this.map.width, this.map.height, [...new Set(this.players.map((p) => p.team))]);
 
+    // A point on one of the centre tiles sits exactly on the map centre (v0.18): on an even-sized map the centre is
+    // a tile corner, so a tile-centred point was half a tile closer to one side (it decided mirror matches on
+    // Highland Pass).
+    const centred = (v: number, size: number) => (Math.abs(v + 0.5 - size / 2) <= 0.5 ? size / 2 : v + 0.5);
     this.points = this.map.strategicPoints.map((sp, index) => ({
       index,
       name: sp.name,
-      x: sp.x + 0.5,
-      y: sp.y + 0.5,
+      x: centred(sp.x, this.map.width),
+      y: centred(sp.y, this.map.height),
       team: null,
       player: null,
       capTeam: null,
@@ -211,12 +215,13 @@ export class World {
   private setupStartingBase(p: Player): void {
     const s = this.map.spawns[p.spawnIndex];
     const hq = this.createBuilding(p.id, 'headquarters', s.tx, s.ty, true);
-    hq.rallyX = hq.x + 3;
-    hq.rallyY = hq.y + 3;
     const towardCenter = {
       x: Math.sign(this.map.width / 2 - hq.x),
       y: Math.sign(this.map.height / 2 - hq.y),
     };
+    // Rally toward the map centre (a fixed +3, +3 sent the south-east base's units behind its HQ — v0.18).
+    hq.rallyX = hq.x + 3 * (towardCenter.x || 1);
+    hq.rallyY = hq.y + 3 * (towardCenter.y || 1);
     const starting: UnitTypeId[] = ['rifleman', 'rifleman', 'rifleman', 'at-soldier', 'recon-vehicle'];
     const spots = this.grid.spreadTiles(
       Math.floor(hq.x + towardCenter.x * 3),

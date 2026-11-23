@@ -156,6 +156,13 @@ HUD clicks not reaching the battlefield, pause stopping the simulation, surrende
   checkbox gives a "Coast" map with a big sea and no Centre, choice remembered; a Hard AI given a yard and Research Center queues a
   Destroyer.
 
+## v0.18 additions
+
+- `pnpm sim` adds "campaign finale": Shadow Front with a Hard AI standing in for the player (8 seeds).
+- The v0.16 "ships while holding" test now sets its situation up directly (it depended on how a match unfolded).
+- Mirror fairness was checked with a throw-away tick-by-tick mirror comparison (see AI_DESIGN §6p) and the spawn
+  fairness simulation.
+
 ## v0.17 additions
 
 - game-ai `adaptation.test.ts` (9): rules (Easy never adapts; patience / switch-target / press; cap; small groups
@@ -168,7 +175,7 @@ HUD clicks not reaching the battlefield, pause stopping the simulation, surrende
   every difficulty notices but only Hard+ act / prime, a Hard commander facing a human primes from memory and
   announces it while an AI-only match ignores it.
 - game-core missions (+2): Iron Convoy (no base, convoy + 7-unit ambush, not defeated without buildings, escort →
-  deploy → 5-minute hold whose clock restarts when the base falls → destroy) and Shadow Front (2 vs 2 Hard,
+  deploy → 5-minute hold whose clock restarts when the base falls → destroy) and Shadow Front (2 vs 2, Hard + Normal enemies,
   all points + both HQs, decapitation win); unlock order for 7 missions.
 - Browser: `round17b` suite (11 checks): Shadow Front locked until Iron Convoy; Iron Convoy briefing, Snowfield /
   snow / night, no base + convoy + ambush, U deploys the MCV at the crossroads, objectives advance to the hold;

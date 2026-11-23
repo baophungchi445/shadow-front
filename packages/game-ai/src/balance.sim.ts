@@ -4,7 +4,7 @@
  */
 import { it } from 'vitest';
 import type { MapId, Personality } from '@shadow-front/shared-types';
-import { World } from '@shadow-front/game-core';
+import { World, getMission } from '@shadow-front/game-core';
 import { AICommander, Adaptation } from './index';
 
 const MAX_TICKS = 20 * 60 * 30;
@@ -145,3 +145,23 @@ it('naval: ships built / lost on sea maps', () => {
     }
   console.log('\nships built: patrol/destroyer/submarine/landing\n' + rows.join('\n'));
 }, 1_800_000);
+
+it('campaign finale: Shadow Front with a Hard AI standing in for the player', () => {
+  let wins = 0;
+  let losses = 0;
+  for (let seed = 1; seed <= 8; seed++) {
+    const cfg = getMission('shadow-front')!.config('Stand-in', seed);
+    cfg.slots[0] = { kind: 'ai', name: 'Stand-in', faction: 'western', team: 0, difficulty: 'hard', personality: 'warlord' };
+    const w = new World(cfg);
+    const ais = w.players.map((p) => new AICommander(w, p.id));
+    for (let t = 0; t < 20 * 60 * 40 && w.winningTeam === null; t++) {
+      for (const a of ais) a.update();
+      w.step();
+    }
+    if (w.winningTeam === 0) wins++;
+    else if (w.winningTeam === 1) losses++;
+  }
+  console.log(`
+Shadow Front, our side: won ${wins}, lost ${losses}, unfinished ${8 - wins - losses}`);
+}, 1_800_000);
+

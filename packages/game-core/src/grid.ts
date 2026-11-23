@@ -123,18 +123,25 @@ export class WaterNav implements Nav {
 
 type Walk = Pick<Nav, 'width' | 'height' | 'walkable'>;
 
+/** Scan direction for tile (tx, ty): +1 in the north-west half of an axis, -1 in the other (mirrored scans). */
+function quadrant(g: Pick<Nav, 'width' | 'height'>, tx: number, ty: number): [number, number] {
+  return [tx + 0.5 < g.width / 2 ? 1 : -1, ty + 0.5 < g.height / 2 ? 1 : -1];
+}
+
 function nearestBy(g: Walk, tx: number, ty: number, maxRadius: number): { x: number; y: number } | null {
   tx = Math.max(0, Math.min(g.width - 1, Math.floor(tx)));
   ty = Math.max(0, Math.min(g.height - 1, Math.floor(ty)));
   if (g.walkable(tx, ty)) return { x: tx, y: ty };
+  // Ties are broken in a scan mirrored per map quadrant, so mirrored maps give mirrored results (v0.18).
+  const [sx, sy] = quadrant(g, tx, ty);
   for (let r = 1; r <= maxRadius; r++) {
     let best: { x: number; y: number } | null = null;
     let bestD = Infinity;
     for (let j = -r; j <= r; j++)
       for (let i = -r; i <= r; i++) {
         if (Math.max(Math.abs(i), Math.abs(j)) !== r) continue;
-        const x = tx + i;
-        const y = ty + j;
+        const x = tx + i * sx;
+        const y = ty + j * sy;
         if (!g.walkable(x, y)) continue;
         const d = i * i + j * j;
         if (d < bestD) {
@@ -151,13 +158,14 @@ function spreadBy(g: Walk & Pick<Nav, 'nearestWalkable'>, tx: number, ty: number
   const out: { x: number; y: number }[] = [];
   const origin = g.nearestWalkable(tx, ty);
   if (!origin) return out;
+  const [sx, sy] = quadrant(g, origin.x, origin.y);
   for (let r = 0; out.length < count && r < 20; r++) {
     const ring: { x: number; y: number; d: number }[] = [];
     for (let j = -r; j <= r; j++)
       for (let i = -r; i <= r; i++) {
         if (Math.max(Math.abs(i), Math.abs(j)) !== r) continue;
-        const x = origin.x + i;
-        const y = origin.y + j;
+        const x = origin.x + i * sx;
+        const y = origin.y + j * sy;
         if (g.walkable(x, y)) ring.push({ x, y, d: i * i + j * j });
       }
     ring.sort((a, b) => a.d - b.d);

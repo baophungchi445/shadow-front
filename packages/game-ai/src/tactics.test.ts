@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Personality } from '@shadow-front/shared-types';
 import { World, getMission, type Unit } from '@shadow-front/game-core';
 import { AICommander } from './commander';
+import { findPlacement, findShoreSite } from './placement';
 
 /** 2v2 on Desert Storm: players 0 + 2 are allies (team 0) against 1 + 3. */
 function setup(pers: Personality[], seed = 3) {
@@ -307,14 +308,31 @@ describe('AI tactics (v0.8)', () => {
   });
 
   it('keeps building ships while land production is held before the first attack (v0.16)', () => {
+    // Set the situation up directly (whether a match reaches it depends on the seed): before the first attack
+    // time, a big home army (land production held) and a finished Naval Yard on the home shore.
     const world = new World(getMission('tidewater')!.config('T', 1));
     const ai = new AICommander(world, 1);
+    for (let i = 0; i < 20 * 60 * 2; i++) {
+      ai.update();
+      world.step();
+    }
+    const hq = world.playerBuildings(1).find((b) => b.type === 'headquarters')!;
+    for (const t of ['power-plant', 'power-plant', 'war-factory'] as const) {
+      const spot = findPlacement(world, 1, t, hq.x, hq.y, 14)!;
+      world.createBuilding(1, t, spot.tx, spot.ty, true);
+    }
+    const site = findShoreSite(world, 1, hq)!;
+    expect(site).not.toBeNull();
+    world.createBuilding(1, 'naval-yard', site.tx, site.ty, true);
+    for (let i = 0; i < 30; i++) world.createUnit(1, 'main-battle-tank', hq.x + (i % 6) - 3, hq.y + 4 + Math.floor(i / 6));
+    world.players[1].credits = 20000;
     let held = false;
-    for (let i = 0; i < 20 * 60 * 14; i++) {
+    for (let i = 0; i < 20 * 60 * 2; i++) {
       ai.update();
       world.step();
       if (ai.lastDecision === 'holding production until first attack') held = true;
     }
+    expect(world.tick).toBeLessThan(10000); // still before the first attack
     expect(held).toBe(true);
     expect(world.playerUnits(1).filter((u) => u.naval && u.def.weapon).length).toBeGreaterThanOrEqual(1);
   });

@@ -1477,7 +1477,7 @@ Nguồn: các mục ⬜ trong `docs/PLAN_STATUS.md`. Vẫn chưa làm online / �
 | 17.2 | **AI nhớ lối chơi của bạn giữa các trận** (Hard / Insane, lưu trong hồ sơ offline): chuẩn bị đối sách từ đầu trận; tắt được trong Settings | AI | ✅ |
 | 17.3 | **Nhiệm vụ 6 "Iron Convoy"** (Snowfield, tuyết + đêm): hộ tống MCV tới vị trí, lập căn cứ tiền tuyến, giữ 5 phút, tiêu diệt địch | §2 Campaign | ✅ |
 | 17.4 | **Nhiệm vụ 7 "Shadow Front"** (trận cuối, 2v2 có đồng minh AI, địch Hard thích nghi): chiếm mọi điểm, phá HQ cả hai địch | §2 Campaign | ✅ |
-| 17.5 | Kiểm tra (unit test + Chrome / Edge / Firefox), tài liệu | — | ⏳ |
+| 17.5 | Kiểm tra (unit test + Chrome / Edge / Firefox), tài liệu | — | ✅ |
 
 ## Nhật ký đợt 17
 
@@ -1559,4 +1559,90 @@ Nguồn: các mục ⬜ trong `docs/PLAN_STATUS.md`. Vẫn chưa làm online / �
   tiêu, đồng hồ tính lại khi mất căn cứ; Shadow Front: 2v2 Hard, đủ điểm + 2 HQ, thắng kiểu chặt đầu; thứ tự mở khóa
   7 nhiệm vụ). Tổng **201 unit test PASS**; typecheck + lint sạch. Bộ trình duyệt mới **round17b** (11 bài) và bộ
   `campaign` (giờ 7 nhiệm vụ) PASS trên Chrome.
+
+### ✅ 17.5 Kiểm tra, trình duyệt, tài liệu
+- Unit test: **201 PASS** (server 3, game-data 25, game-core 140, game-ai 33); typecheck + lint sạch.
+- **19 bộ test trình duyệt × Chrome / Edge / Firefox = 57/57 PASS**, không lỗi console (lần chạy cuối, sau toàn bộ thay
+  đổi của đợt 17).
+- Tài liệu: CHANGELOG 0.17.0, AI_DESIGN §6o (thích nghi, trí nhớ, tìm địch ngoài vị trí xuất phát), TESTING (v0.17),
+  README (chiến dịch 7 nhiệm vụ).
+- Mô phỏng cân bằng: `pnpm --filter @shadow-front/game-ai sim` (thêm 2 bài so sánh AI bật / tắt thích nghi).
+
+## Tổng kết đợt 17
+- Đã xong: **AI thích nghi trong trận** (rút kinh nghiệm theo từng giai đoạn 90 giây, đọc lối chơi rush / rùa / không
+  quân / hải quân), **AI nhớ thói quen của bạn giữa các trận** (Hard / Insane, tắt / quên được trong Settings),
+  **nhiệm vụ 6 Iron Convoy** và **nhiệm vụ 7 Shadow Front** — chiến dịch giờ có 7 nhiệm vụ.
+- Lỗi thật tìm ra nhờ mô phỏng / test và đã sửa: AI không bao giờ tìm thấy căn cứ đặt ngoài vị trí xuất phát; AI gọi
+  quân phục kích về nhà; phản ứng chống rush bằng trụ làm AI yếu đi; nút Quên không xóa được dữ liệu chưa đủ ngưỡng;
+  camera không nhìn vào quân khi chưa có căn cứ.
+- Nói thẳng: AI-vs-AI chưa cho thấy AI thích nghi **thắng nhiều hơn** (thắng nhanh hơn 0,6–1,6 phút); hiệu quả thật
+  cần người chơi thử. Vẫn còn: lệch vị trí xuất phát trên Highland Pass / Forest Warfare (từ đợt 16) — lưu ý Shadow
+  Front dùng Forest Warfare.
+- Chưa commit: mọi thay đổi đang ở working tree.
+
+
+---
+
+## Đợt 18 — kế hoạch (chơi offline với máy)
+
+| # | Công việc | Mục PLAN | Trạng thái |
+|---|---|---|---|
+| 18.1 | **Sửa lệch vị trí xuất phát còn lại** (Highland Pass 0–6, Forest Warfare 1–5 khi 2 AI giống hệt nhau) — Forest Warfare là map của trận cuối | cân bằng | ✅ |
+| 18.2 | **Kiểm tra trận cuối Shadow Front bằng mô phỏng**: phe bạn (thay người chơi bằng AI Hard) có thắng được không, đồng minh có giúp thật không; chỉnh nếu quá khó / quá dễ | §2 Campaign | ✅ |
+| 18.3 | Kiểm tra (unit test + Chrome / Edge / Firefox), tài liệu | — | ✅ |
+
+## Nhật ký đợt 18
+
+### ✅ 18.1 Sửa lệch vị trí xuất phát còn lại
+- **Cách tìm**: lõi chiến đấu được kiểm tra lại trên map đối xứng tuyệt đối (2 đội giống hệt, không AI, 30 tình huống):
+  không thiên vị (14–15). Nên chuyển sang **so sánh vi sai**: cho 2 AI cùng chuỗi số ngẫu nhiên và cùng nhịp suy nghĩ,
+  mỗi tick so trạng thái bên này với ảnh xoay 180° của bên kia → tick đầu tiên khác nhau chỉ thẳng vào chỗ code lệch.
+  Ban đầu lệch ngay **tick 1**; sau khi sửa, giữ đối xứng tới tick 201 (Forest) / 790 (Highland) — phần còn lại là
+  unit đẩy nhau được xử lý tuần tự, không thể đối xứng tuyệt đối.
+- **6 nguồn lệch đã sửa**:
+  1. Điểm tập kết của HQ cố định (+3, +3) → căn cứ đông nam đưa quân **ra sau** HQ. Giờ hướng về giữa map.
+  2. `spreadTiles` / `nearestWalkable` (rải unit khởi đầu, ô xuất xưởng, ô trống gần nhất) phá thế hòa theo thứ tự
+     trên-trái. Giờ quét lật theo góc phần tư của map.
+  3. Làm tròn gốc tọa độ khi AI đặt công trình lệch 1 ô ở bên đối xứng. Giờ làm tròn trong khung đã lật.
+  4. Độ xê dịch ngẫu nhiên khi đặt công trình tính theo hướng tuyệt đối. Giờ theo hướng về giữa map.
+  5. Hai vị trí xuất phát cách đều nhau: cả hai AI cùng trinh sát góc đông bắc trước. Giờ phá hòa theo góc của mình.
+  6. **Điểm chiến lược ở giữa map lệch nửa ô**: map 64 ô có tâm ở góc ô (32; 32), điểm đặt ở tâm ô (31,5) gần một bên
+     hơn ~1,4 ô. Các map Tiled lợi cho vị trí 1, Desert Storm lợi cho vị trí 2. Giờ điểm ở ô trung tâm được đặt đúng
+     tâm map. (Mục tiêu Iron Convoy dời theo: ngã tư ở (32; 32).)
+- **Kết quả** (AI Warlord Hard giống hệt nhau):
+  - Bài chuẩn 30 trận / 5 map: **2–17** (ban đầu) → 5–16 (đợt 16) → **7–10, hòa 13** (bây giờ).
+  - 18 seed mỗi map: **Forest Warfare 7–7** (hòa 4) — map trận cuối đã cân; **Highland Pass 7–10** (trước 0–13).
+  - Highland từng đảo chiều 13–5 khi mới sửa 5 lỗi đầu → lộ ra lỗi (6): map này rất nhạy với lợi thế nhỏ ở Town Square.
+- Kèm theo: test "vẫn đóng tàu khi giữ quân" (đợt 16) phụ thuộc diễn biến trận nên hỏng khi trận đổi → viết lại tự dựng
+  tình huống. `AICommander.thinkOffset` tách ra để test căn nhịp suy nghĩ.
+- Test: **201 unit test PASS**; typecheck + lint sạch.
+
+### ✅ 18.2 Kiểm tra trận cuối Shadow Front bằng mô phỏng
+- Thay người chơi bằng một **AI Hard** (Warlord) đánh cùng đồng minh Northern Wing, tối đa 40 phút mỗi trận.
+- Bản ban đầu (2 địch Hard): phe ta **thắng 3, thua 4, 1 chưa phân thắng bại** / 8 seed — quá dốc cho người chơi vừa
+  qua nhiệm vụ 6 (đối thủ Normal). Địch có thích nghi thật: mỗi trận 3–10 lần đổi chiến thuật (công thành, chống rush,
+  kiên nhẫn, đổi mục tiêu, dồn ép).
+- Chỉnh: **Black Sun xuống Normal** (vẫn rút kinh nghiệm sau tấn công, không đọc lối chơi); Shadow Legion giữ Hard.
+  16 seed: phe ta **thắng 8, thua 6, 2 chưa phân thắng bại** (~57% trận có kết quả); có trận thắng trong 9,5 phút, có
+  trận kéo 40 phút.
+- Giới hạn trung thực: AI đóng vai người chơi không thay được người thật (vi mô tốt hơn AI, đa nhiệm kém hơn). Cần bạn
+  chơi thử để chỉnh tiếp; bài mô phỏng này được thêm vào `pnpm sim` ("campaign finale").
+- Cập nhật test (game-core: địch Hard + Normal), bộ trình duyệt round17b, CHANGELOG, TESTING.
+
+### ✅ 18.3 Kiểm tra, trình duyệt, tài liệu
+- Unit test: **201 PASS**; typecheck + lint sạch.
+- **19 bộ test trình duyệt × Chrome / Edge / Firefox: PASS.** Lần chạy loạt có 3 lượt lỗi môi trường (Chrome `survival`
+  bị ngắt khung trang lúc Vite vừa khởi động; lỗi mất mạng khi tải font; Firefox `survival`) → chạy lại đều PASS.
+- Sửa **bộ test `survival`**: bài "đồng hồ đợt địch" chờ cố định 2 giây, có lúc trận chưa chạy tick nào nên đồng hồ vẫn
+  "03:00" → lỗi chập chờn lặp lại nhiều đợt (đã ghi chú ở đợt 17). Giờ chờ tới khi trận thật sự chạy; 4 lần liên tiếp
+  trên 3 trình duyệt đều 8/8. Game không phải sửa.
+- Tài liệu: CHANGELOG 0.18.0, AI_DESIGN §6p (cách kiểm tra đối xứng), TESTING (v0.18).
+
+## Tổng kết đợt 18
+- **Công bằng vị trí xuất phát**: tìm và sửa thêm 6 nguồn lệch nhờ so sánh vi sai từng tick; AI giống hệt nhau giờ
+  7–10 (ban đầu 2–17), Forest Warfare 7–7, Highland Pass 7–10.
+- **Trận cuối Shadow Front** được cân chỉnh bằng mô phỏng: Black Sun xuống Normal, phe bạn (AI Hard đóng vai) thắng
+  ~57% số trận có kết quả.
+- Còn tồn tại: mô phỏng không thay được người chơi thật — độ khó Iron Convoy / Shadow Front cần bạn chơi thử.
+- Chưa commit.
 

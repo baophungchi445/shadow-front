@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.18.0 — in progress (offline: fair spawns, finale tuning)
+
+- **Fair spawn corners**: six more ways one corner was favoured were found by running a mirror match tick by tick and
+  fixed — the HQ rally point (it sent the south-east base's units behind its HQ), tie-breaking when spreading units /
+  finding free tiles, AI building placement rounding and jitter, the AI's choice between equally far spawns to scout,
+  and **centre strategic points sitting half a tile off the map centre** (they now sit exactly on it). Identical
+  Hard AIs: spawn 1 vs spawn 2 wins 7–10 (30 matches; was 2–17 before v0.16), Forest Warfare 7–7 over 18 matches.
+- **Shadow Front** tuned with simulations (a Hard AI standing in for you): Black Sun is now Normal (it still learns
+  from its attacks); your side wins about 57 % of decided matches (was 3 of 8 with two Hard enemies).
+
 ## 0.17.0 — in progress (offline: adaptive AI, new campaign missions)
 
 - **AI learns during a match** (Normal and up): every attack is judged (enemy losses vs own losses). Bad trades make it
@@ -15,7 +25,8 @@
   ambush to the Frozen Crossroads, deploy it, hold the forward base for 5 minutes (the clock restarts if it falls)
   while the Iron Guard counter-attacks, then destroy them.
 - **Campaign mission 7 "Shadow Front"** (Forest Warfare, day / night cycle, finale): 2 vs 2 with an allied Hard AI
-  against two Hard commanders that adapt; hold all 3 points at once and destroy both enemy Headquarters.
+  against two commanders that adapt (one Hard, one Normal); hold all 3 points at once and destroy both enemy
+  Headquarters.
 - Fixes: the AI never found an enemy that built away from every spawn (it now scouts strategic points and the map
   centre, then keeps patrolling them); the camera starts on your units when you have no base.
 
