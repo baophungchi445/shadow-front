@@ -37,8 +37,8 @@ export const VI: Record<string, string> = {
   Settings: 'Cài đặt',
   'Camera & controls': 'Camera, điều khiển, ngôn ngữ',
   'Level {level} · {n} achievements': 'Cấp {level} · {n} thành tích',
-  'v0.10 prototype · procedural placeholder graphics & audio · offline skirmish, survival & campaign vs AI':
-    'bản thử v0.10 · đồ họa và âm thanh tạm vẽ bằng code · chơi offline với máy: đấu, sinh tồn, chiến dịch',
+  'v0.15 prototype · procedural placeholder graphics & audio · offline skirmish, survival & campaign vs AI':
+    'bản thử v0.15 · đồ họa và âm thanh tạm vẽ bằng code · chơi offline với máy: đấu, sinh tồn, chiến dịch',
 
   // ------------------------------------------------------------ skirmish setup
   Skirmish: 'Đấu với máy',
@@ -350,6 +350,8 @@ export const VI: Record<string, string> = {
   '👥 {a}/{b} inside': '👥 {a}/{b} bên trong',
   Unload: 'Thả quân',
   'select infantry, right-click here to get in': 'chọn bộ binh, chuột phải vào đây để vào',
+  '👥 {a}/{b} seats taken': '👥 {a}/{b} chỗ',
+  'troops or vehicles: right-click here': 'lính hoặc xe: chuột phải vào đây',
   Deploy: 'Triển khai',
   'Unfold into a {name} here (needs a free 3×3 spot)': 'Triển khai thành {name} tại chỗ (cần ô trống 3×3)',
   Commands: 'Lệnh',
@@ -387,6 +389,8 @@ export const VI: Record<string, string> = {
 
 /** Runtime messages with names / numbers inside (regex → replacement). */
 export const VI_PATTERNS: [RegExp, string][] = [
+  [/^Randomly generated (\w+) battlefield \(seed (\d+)\)\. Mirrored for fairness\.$/, 'Chiến trường $1 tạo ngẫu nhiên (seed $2). Đối xứng để công bằng.'],
+  [/^Randomly generated (\w+) coast with an inland sea \(seed (\d+)\)\. Mirrored for fairness\.$/, 'Bờ biển $1 tạo ngẫu nhiên, có biển nội địa (seed $2). Đối xứng để công bằng.'],
   [/^Spawn (\d+) needs a free 3×3 area of open ground \(no ore, not at the edge\)$/, 'Điểm xuất phát $1 cần ô trống 3×3 trên đất trống (không quặng, không sát mép)'],
   [/^Spawns (\d+) and (\d+) are too close$/, 'Điểm xuất phát $1 và $2 quá gần nhau'],
   [/^Strategic point (\d+) must be on open ground$/, 'Điểm chiến lược $1 phải ở trên đất trống'],
@@ -468,6 +472,8 @@ Object.assign(VI, {
   'Not buildable': 'Không xây được',
   'Nothing to cancel': 'Không có gì để hủy',
   'Only infantry can get in': 'Chỉ bộ binh mới vào được',
+  'Transport is full': 'Phương tiện đã đầy',
+  'Cannot carry units': 'Không chở được quân',
   'Queue empty': 'Hàng chờ trống',
   'Queue full': 'Hàng chờ đã đầy',
   'Requirements not met': 'Chưa đủ điều kiện',
@@ -482,6 +488,18 @@ Object.assign(VI, {
   'Cannot build on ore': 'Không xây trên quặng',
   'Enemy units in the way': 'Có quân địch cản đường',
   'Must be placed next to an ore field': 'Phải đặt cạnh mỏ quặng',
+  'Must be built on the shore': 'Phải xây ven bờ nước',
+  '🌊 Sea': '🌊 Biển',
+  'Inland sea with a bay at every base (navy)': 'Biển nội địa, mỗi căn cứ có một vịnh (hải quân)',
+  dunes: 'đồi cát',
+  valley: 'thung lũng',
+  outskirts: 'ngoại ô',
+  'Navy: open sea of {n} tiles; Naval Yard possible at spawn {list}':
+    'Hải quân: biển rộng {n} ô; xây được Xưởng tàu ở vị trí {list}',
+  'Navy: no harbour — needs a sea of 300+ water tiles touching open ground near a spawn':
+    'Hải quân: chưa có cảng — cần vùng biển từ 300 ô nước giáp đất trống gần một vị trí xuất phát',
+  'Move closer to the shore to unload': 'Đưa tàu sát bờ hơn để thả quân',
+  'Only ground units can get in': 'Chỉ quân mặt đất mới lên được',
   'Out of map bounds': 'Ra ngoài bản đồ',
   'This unit cannot deploy': 'Unit này không triển khai được',
   'Too far from your base': 'Quá xa căn cứ',

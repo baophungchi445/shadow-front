@@ -85,6 +85,8 @@ interface SavedSetup {
   waves: number;
   unitCap: number;
   mapSeed: number;
+  /** v0.16: random map with an inland sea. */
+  mapSea?: boolean;
   /** Army colour; 0 = faction colour. */
   color: number;
   /** Name of the custom map when mapId === 'custom'. */
@@ -178,6 +180,7 @@ export function SkirmishSetup() {
   const [unitCap, setUnitCap] = useState(initial.unitCap);
   const [color, setColor] = useState(Number.isFinite(initial.color) ? initial.color : 0);
   const [mapSeed, setMapSeed] = useState(Number.isFinite(initial.mapSeed) ? initial.mapSeed : 1);
+  const [mapSea, setMapSea] = useState(!!initial.mapSea);
   const [customMaps] = useState(loadCustomMaps);
   const [customName, setCustomName] = useState(initial.customName ?? '');
   const [weather, setWeather] = useState<Weather>(initial.weather);
@@ -187,8 +190,8 @@ export function SkirmishSetup() {
     () =>
       mapId === 'custom' && stored
         ? toMapDef(stored)
-        : getMap(mapId === 'custom' ? 'desert-storm' : mapId, mapSeed),
-    [mapId, stored, mapSeed],
+        : getMap(mapId === 'custom' ? 'desert-storm' : mapId, mapSeed, mapId === 'random' && mapSea),
+    [mapId, stored, mapSeed, mapSea],
   );
   const survival = mission === 'survival';
   // Survival keeps at least one spawn free as a wave entry point; every AI is an ally.
@@ -222,6 +225,7 @@ export function SkirmishSetup() {
       waves,
       unitCap,
       mapSeed,
+      mapSea,
       color,
       customName: mapId === 'custom' ? customName : undefined,
       weather,
@@ -236,6 +240,7 @@ export function SkirmishSetup() {
       survival: survival ? { difficulty: waveDifficulty, waves } : undefined,
       unitCap,
       mapSeed: mapId === 'random' ? mapSeed : undefined,
+      mapSea: mapId === 'random' && mapSea ? true : undefined,
       customMap: mapId === 'custom' ? map : undefined,
       weather,
       dayTime,
@@ -552,6 +557,15 @@ export function SkirmishSetup() {
             {mapId === 'random' && (
               <div className="flex items-center justify-between text-xs text-gray-400">
                 <span>{map.name}</span>
+                <label className="flex cursor-pointer items-center gap-1" title={t('Inland sea with a bay at every base (navy)')}>
+                  <input
+                    type="checkbox"
+                    checked={mapSea}
+                    onChange={(e) => setMapSea(e.target.checked)}
+                    data-testid="map-sea"
+                  />
+                  {t('🌊 Sea')}
+                </label>
                 <button
                   className="btn px-2 py-0.5 text-xs"
                   onClick={() => setMapSeed(1 + Math.floor(Math.random() * 999999))}
@@ -563,7 +577,7 @@ export function SkirmishSetup() {
             <div className="rounded border border-graphite-600 bg-graphite-950 p-2">
               <MapPreview map={map} slots={ais.length + 1} survival={survival} />
             </div>
-            <div className="text-sm text-gray-400">{t(map.description)}</div>
+            <div className="text-sm text-gray-400">{t.msg(map.description)}</div>
             <div className="text-xs text-gray-500">
               {t('{w}×{h} tiles · up to {n} commanders', {
                 w: map.width,

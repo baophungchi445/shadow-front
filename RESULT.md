@@ -1126,7 +1126,7 @@ Nguồn: các mục ⬜ trong `docs/PLAN_STATUS.md`. Vẫn chưa làm online / �
 | 12.2 | **Môi trường phá hủy được**: rừng / nhà dân bị pháo, bom, nổ phá thành đất trống (mở đường mới) | §6 | ✅ |
 | 12.3 | **Xoay công trình**: phím R khi đặt đổi hướng mặt trước (cửa ra quân, điểm tập kết mặc định, hình vẽ) | §5 | ✅ |
 | 12.4 | **Avatar** riêng trong Profile (bộ huy hiệu vẽ sẵn, chọn hình + màu) | §2 | ✅ |
-| 12.5 | Kiểm tra (unit test + Chrome / Edge / Firefox), tài liệu | — | ⬜ |
+| 12.5 | Kiểm tra (unit test + Chrome / Edge / Firefox), tài liệu | — | ✅ |
 
 ## Nhật ký đợt 12
 
@@ -1165,3 +1165,261 @@ Nguồn: các mục ⬜ trong `docs/PLAN_STATUS.md`. Vẫn chưa làm online / �
 - Hồ sơ cũ tự nhận avatar mặc định (ngôi sao xanh); dữ liệu hỏng (hình / màu không có trong danh sách) trở về mặc định.
 - Test: game-core +1 (mặc định, giữ lựa chọn hợp lệ, dữ liệu hỏng / hồ sơ cũ). Kiểm tra trình duyệt: chọn đại bàng + nền đỏ, menu hiện
   đúng, tải lại trang vẫn giữ, 0 lỗi console.
+
+### ✅ 12.5 Kiểm tra, trình duyệt, tài liệu
+- `pnpm check`: typecheck ✅, lint ✅, test **160/160** (game-data 21, game-core 124, game-ai 12, server 3) ✅, build ✅.
+- Bộ test trình duyệt mới **round12** (11 bài): chọn avatar (8 hình), huy hiệu menu hiện đúng, avatar được lưu; cọ Đồi trong trình sửa map;
+  đồi trên Desert Storm (+2 tầm nhìn, +1 tầm bắn); R xoay công trình khi đặt (gợi ý, hướng, điểm tập kết đúng phía); R vẫn là Rút lui
+  khi không đặt; pháo đốt rừng thành cỏ đi được; nhãn tiếng Việt.
+- Kết quả 14 bộ × 3 trình duyệt (42 lượt): 40 lượt PASS ngay, 0 lỗi console. 2 lượt hỏng ở lần đầu: Chrome `campaign` (bài "thua nhiệm vụ +
+  chơi lại") và Edge `round3` (2 bài chiếm North Ridge bằng chuột phải). Chạy lại riêng 2 lần mỗi bộ đều PASS toàn bộ → lỗi chập chờn do
+  thời gian chờ của script (các bài này không liên quan thay đổi đợt 12), game không phải sửa.
+- Tài liệu cập nhật v0.12: CHANGELOG, README, GAMEPLAY_SYSTEMS §5o, AI_DESIGN §6j, TESTING, DEVELOPMENT_ROADMAP, PLAN_STATUS; menu chính ghi v0.12.
+
+## Tổng kết đợt 12
+- Đã xong: **đồi / điểm cao** (tầm nhìn, tầm bắn, khó bắn trúng từ dưới), **rừng / nhà bị phá** bởi vũ khí nổ (mở đường mới),
+  **xoay công trình** (phím R, quân ra ở mặt trước; AI quay nhà máy về mặt trận), **avatar** riêng trong hồ sơ.
+- Chất lượng: 160 unit test, 14 bộ test trình duyệt PASS trên Chrome / Edge / Firefox.
+- Còn lại (offline): hải quân (PLAN ghi "Future"); AI chủ động chiếm đồi; vẽ unit nâng cao khi đứng trên đồi; hình công trình riêng cho
+  hướng sau / trái.
+- Không làm được trên trình duyệt: nút Thoát, chọn độ phân giải. Tạm hoãn theo yêu cầu: online, đồ họa / âm thanh thật.
+
+---
+
+## Đợt 13 — kế hoạch (chơi offline với máy)
+
+| # | Công việc | Mục PLAN | Trạng thái |
+|---|---|---|---|
+| 13.1 | **AI chiếm đồi**: AI đưa quân phòng thủ / pháo lên đồi gần căn cứ hoặc gần mặt trận | §6, AI | ✅ |
+| 13.2 | **Vẽ unit nâng cao trên đồi** (unit mặt đất đứng trên ô đồi được vẽ cao hơn, bóng đổ đúng) | §6 | ✅ |
+| 13.3 | **Hình công trình riêng cho hướng sau / trái** (không còn lật chung với trước / phải) | §5 | ✅ |
+| 13.4 | **Hải quân cơ bản**: Xưởng tàu đặt cạnh nước, tàu tuần tra / tàu pháo đi trên nước, map có nước | §4 (Future) | ✅ |
+| 13.5 | Kiểm tra (unit test + trình duyệt), tài liệu | — | ✅ |
+
+## Nhật ký đợt 13
+
+### ✅ 13.1 AI chiếm đồi
+- Từ độ khó Normal: khi quân ở nhà đủ đông (≥ 6 unit mặt đất có vũ khí và đủ lực lượng tối thiểu), AI đưa **tối đa 3 unit tầm xa**
+  (ưu tiên pháo, sau đó unit có tầm bắn xa nhất) lên **ngọn đồi gần căn cứ nhất** (trong 36 ô quanh HQ) làm chốt hỏa lực.
+- Quân giữ đồi không bị kéo đi tấn công; nếu đuổi địch xuống đồi thì khi rảnh sẽ tự quay lại ô của mình. Không chiếm khi đang
+  phòng thủ / mở đầu trận. Easy không dùng. Map không có đồi (hoặc đồi < 3 ô) thì bỏ qua.
+- Test: game-ai +1 (trên Desert Storm, AI đưa pháo + xe tăng lên đồi, 2–3 unit, đều được tính là đứng trên đồi).
+
+### ✅ 13.2 Đồi vẽ nổi, unit đứng trên mặt đồi
+- Mặt đồi giờ được vẽ **cao hơn đồng bằng 8 px**, có vách đá ở cạnh giáp ô thấp và viền sáng quanh mép; đường đồng mức nằm trên mặt đồi.
+- Unit mặt đất và công trình đứng trên đồi được vẽ **trên mặt đồi** (nâng lên 8 px). Ở nửa ô quanh mép đồi độ cao chuyển mượt
+  (unit "leo" lên / xuống dốc chứ không nhảy). Máy bay không bị ảnh hưởng. Vòng chọn, thanh máu, tia lửa nòng súng đi theo vị trí mới.
+- Chỉ là hiển thị (không đổi mô phỏng). Kiểm tra bằng trình duyệt: xe tăng / lính trên đồi ở Coastal Front đứng đúng trên mặt đồi.
+- Chưa làm: nếu rừng / nhà sát phía trên một ô đồi bị phá, phần mặt đồi nhô lên ô đó có thể bị vẽ đè (hiếm, map hiện tại không có).
+
+### ✅ 13.3 Hình công trình mặt trước / mặt sau riêng
+- Bỏ cách lật hình (hướng sau / trái dùng chung hình). Công trình được vẽ theo đúng hướng: hướng 0 / 1 (mặt trước quay về phía camera)
+  có **cửa xe / cửa chính** trên mặt tường phía trước; hướng 2 / 3 (mặt trước quay ra sau) thấy **mặt sau**: cửa phụ, lưới thông gió,
+  ống xả (War Factory), cửa sổ (Barracks), quạt thông gió (HQ). Sân bay có **vạch lăn bánh** sơn về phía mặt trước.
+- Sửa luôn lỗi cũ: cửa xe của War Factory trước đây vẽ ở mặt +x trong khi quân ra ở mặt +y (hướng 0) — giờ cửa nằm đúng phía quân ra.
+- Bóng mờ khi đặt công trình cũng vẽ theo hướng. Kiểm tra bằng trình duyệt: 4 War Factory 4 hướng có 4 hình khác nhau.
+
+### ✅ 13.4 Hải quân cơ bản
+- **Map mới Coastal Front** (Bờ biển): biển nội địa giữa bản đồ, mỗi căn cứ có một vịnh ăn vào gần (≈ 10 ô); quân bộ đi vòng theo bờ.
+  Đối xứng tâm, 4 điểm chiến lược trên đất liền, 2 đồi ở mũi đất, quặng nhà xa vịnh.
+- **Xưởng tàu** (Naval Yard, 1500, 3×3, cần War Factory): phải xây **ven bờ** (≥ 2 ô nước sát cạnh; sai thì báo "Phải xây ven bờ nước").
+  Khi đặt, xưởng **tự quay mặt ra nước** (phím R không áp dụng). Tàu hạ thủy ở ô nước trước xưởng.
+- **Tàu tuần tra** (700): nhanh, súng máy bắn được cả máy bay. **Tàu khu trục** (1800, cần Research Center): bọc thép, pháo boong bắn
+  cầu vồng tầm 13 — nã được vào căn cứ sát bờ.
+- Tàu **chỉ đi trên nước** (lớp điều hướng nước riêng); ra lệnh lên đất liền thì tàu đi tới chỗ nước gần nhất. Tàu không chiếm điểm /
+  cờ; quân bộ không xuống nước được. Nghiên cứu giáp / động cơ xe áp dụng cho tàu.
+- **AI** (từ Normal): nếu map có biển lớn (≥ 300 ô) nối bờ nhà với gần căn cứ địch thì xây 1 Xưởng tàu (quay ra nước, không tính vào
+  giới hạn nhà sản xuất) và giữ tối đa 5 tàu (ưu tiên khu trục); tàu đi cùng đợt tấn công và pháo kích bờ biển. Map không có biển thì
+  không xây.
+- Hình vẽ: tàu có vệt sóng, thân nhọn, boong, cabin, cột ăng-ten (khu trục), tháp súng xoay; xưởng có đường trượt hạ thủy, nhà xưởng,
+  cần cẩu. Icon HUD, tên / mô tả tiếng Việt.
+- Test: game-core +5 (Coastal Front có 1 biển lớn tới gần mọi căn cứ và chơi được; Xưởng tàu phải ven bờ và quay ra nước; tàu hạ thủy
+  trên nước, đi lên đất liền vẫn chỉ ở trên nước; xe tăng không xuống nước; khu trục bắn trúng HQ sát bờ), game-ai +2 (AI xây Xưởng tàu
+  và có ≥ 2 tàu, không tàu nào lên cạn; map Desert Storm không xây).
+
+### ✅ 13.5 Kiểm tra, trình duyệt, tài liệu
+- `pnpm check`: typecheck ✅, lint ✅, test **169/169** (game-data 22, game-core 129, game-ai 15, server 3) ✅, build ✅.
+- Bộ test trình duyệt mới **round13** (11 bài): Coastal Front có trong danh sách và chơi được; báo "phải xây ven bờ" khi đặt trong đất liền;
+  có chỗ ven bờ gần căn cứ; Xưởng tàu có trong bảng xây dựng; xưởng tự quay ra nước (kể cả khi đã bấm R); tàu tuần tra đặt sản xuất được,
+  hạ thủy trên nước; ra lệnh lên đất liền vẫn chỉ đi trên nước; War Factory đủ 4 hướng; mô tả map tiếng Việt.
+  Xem ảnh chụp: đồi nổi khối với xe tăng / lính đứng trên mặt đồi; 4 hướng công trình có hình khác nhau; xưởng tàu và tàu.
+- Kết quả 14 bộ × 3 trình duyệt (Chrome, Edge, Firefox): **tất cả PASS, 0 lỗi console**. Một lượt Firefox `river` hỏng ở bước mở trình
+  duyệt (puppeteer hết thời gian chờ khi tạo phiên, chưa chạy bài nào); chạy lại → 7/7 PASS. Game không phải sửa.
+- Sửa thêm: câu giới thiệu ở cuối menu chính bản tiếng Việt bị hiện tiếng Anh từ v0.11 (khóa dịch còn ghi v0.10) — đã cập nhật, menu ghi v0.13.
+- Tài liệu cập nhật v0.13: CHANGELOG, README, GAMEPLAY_SYSTEMS §5p, AI_DESIGN §6k, TESTING, DEVELOPMENT_ROADMAP, PLAN_STATUS.
+
+## Tổng kết đợt 13
+- Đã xong: **AI chiếm đồi** bằng pháo / unit tầm xa, **đồi vẽ nổi** (unit đứng trên mặt đồi), **hình công trình mặt trước / sau riêng**,
+  **hải quân cơ bản** (Xưởng tàu, Tàu tuần tra, Tàu khu trục, map Coastal Front; AI cũng dùng).
+- Chất lượng: 169 unit test, 14 bộ test trình duyệt PASS trên Chrome / Edge / Firefox.
+- Giới hạn hải quân hiện tại: chỉ 2 loại tàu, chưa có tàu ngầm / tàu đổ bộ (chở quân lên bờ); AI chưa đánh riêng bằng hạm đội (tàu đi
+  theo đợt tấn công chung); chỉ Coastal Front có biển đủ lớn (Island Conflict có nước nhưng bị chia thành nhiều vùng nhỏ).
+- Còn lại (offline): mở rộng hải quân (tàu đổ bộ, tàu ngầm), thêm map có biển. Không làm được trên trình duyệt: nút Thoát, chọn độ phân giải.
+  Tạm hoãn theo yêu cầu: online, đồ họa / âm thanh thật.
+
+---
+
+## Đợt 14 — kế hoạch (chơi offline với máy)
+
+| # | Công việc | Mục PLAN | Trạng thái |
+|---|---|---|---|
+| 14.1 | **Tàu đổ bộ** (Landing Craft): chở bộ binh và xe mặt đất (bộ binh 1 chỗ, xe 3 chỗ, tổng 6), lên tàu từ bờ, thả quân khi sát bờ | §4 hải quân | ✅ |
+| 14.2 | **AI đổ bộ**: AI có Xưởng tàu chở quân bằng tàu đổ bộ, thả gần căn cứ địch | AI | ✅ |
+| 14.3 | **Map biển thứ hai** (eo biển chia đôi bản đồ, hai đầu nối đất liền) | §6 | ✅ |
+| 14.4 | Kiểm tra (unit test + Chrome / Edge / Firefox), tài liệu | — | ✅ |
+
+## Nhật ký đợt 14
+
+### ✅ 14.1 Tàu đổ bộ (Landing Craft)
+- Unit mới ở Xưởng tàu: **Tàu đổ bộ** (600, 500 máu, không vũ khí). Chở theo **chỗ ngồi**: 6 chỗ, bộ binh 1 chỗ, xe mặt đất (xe tăng,
+  pháo, xe bọc thép…) 3 chỗ — ví dụ 1 xe tăng + 3 lính, hoặc 2 xe tăng, hoặc 6 lính. Máy bay và tàu không lên được.
+- Lên tàu: chọn quân, chuột phải vào tàu đổ bộ (tàu đậu sát bờ, quân lên từ ô đất gần nhất, tầm với 2,6 ô). Ghế chia theo thứ tự chọn,
+  ai không vừa thì đứng lại.
+- Thả quân (phím U / nút): chỉ khi có đất trống trong vòng 2,5 ô; ngoài biển khơi báo "Đưa tàu sát bờ hơn để thả quân". Tàu chìm thì
+  quân trên tàu chết theo. APC / trực thăng vận tải / Bunker vẫn chỉ nhận bộ binh như cũ.
+- Bảng chọn hiện số chỗ đã dùng / 6. Hình vẽ: thân hộp đáy bằng, khoang trống, cửa dốc mũi, buồng lái ở đuôi; icon, tên / mô tả /
+  thông báo lỗi tiếng Việt (bổ sung luôn bản dịch còn thiếu "Phương tiện đã đầy", "Không chở được quân").
+- Test: game-core +3 (chỗ ngồi và ai được lên; APC không nhận xe tăng; chở 1 xe tăng + 3 lính qua biển, ngoài khơi không thả được, sát bãi
+  biển bên kia thả được và mọi unit đứng trên đất; tàu chìm thì hành khách chết).
+
+### ✅ 14.2 AI đổ bộ
+- AI (từ Normal, đã có Xưởng tàu) đóng **1 tàu đổ bộ** sau khi có ≥ 2 chiến hạm hộ tống. Tàu đậu ở bãi biển nhà; khi đã biết căn cứ địch,
+  qua mốc tấn công đầu và còn ≥ 8 unit mặt đất ở nhà, AI chọn **bãi đổ bộ cách công trình địch 5–12 ô** (ưu tiên máy khai thác / nhà máy
+  điện, tránh ngay dưới họng súng), chất quân gần nhất lên (thường 1 xe tăng + 3 lính, chờ tối đa 20 giây), ra khơi, thả quân thành một
+  đội tấn công mới rồi quay về bãi nhà. Tàu bị bắn còn < 40% máu thì thả quân sớm ở bãi gần nhất.
+- Sửa xung đột: unit vừa được gọi lên tàu (đổ bộ hoặc trực thăng thả quân) không còn bị kéo vào đợt tấn công chung trong cùng lượt suy nghĩ.
+- Map không có bãi biển gần công trình địch thì không đổ bộ.
+- Test: game-ai +1 (Coastal Front: AI chất ≥ 4 chỗ lên tàu, đổ bộ, có quân lên bờ gần căn cứ địch).
+
+### ✅ 14.3 Map Strait Crossing (Eo biển)
+- Map mới **Strait Crossing**: một eo biển ngang giữa bản đồ chia **bắc / nam** (đội bắc: vị trí 1 + 3, đội nam: 2 + 4). Quân bộ chỉ
+  sang được qua **hai eo đất ở hai đầu** (có đường, có đồi canh và mỏ quặng giàu); tàu làm chủ khoảng giữa. Mỗi căn cứ có một vịnh nhỏ
+  để xây Xưởng tàu. Đối xứng tâm, 4 điểm chiến lược (2 eo đất, 2 bờ biển).
+- Lần đầu dựng map bị 2 lỗi, đã sửa trước khi test pass: dải cát của vịnh vẽ đè lên eo biển (đổi thứ tự: cát trước, nước sau), và mỏ
+  quặng nhà cách căn cứ > 12 ô (luật map hợp lệ) — dời lại gần.
+- Mô tả tiếng Việt. Test: game-core +1 (map chơi được, 1 vùng biển lớn tới gần mọi căn cứ, cột giữa bị nước cắt, hai cột rìa không có
+  nước), game-ai +1 (AI xây Xưởng tàu và có hạm đội trên Strait Crossing).
+
+### ✅ 14.4 Kiểm tra, trình duyệt, tài liệu
+- `pnpm check`: typecheck ✅, lint ✅, test **176/176** (game-data 23, game-core 133, game-ai 17, server 3) ✅, build ✅.
+- Bộ test trình duyệt mới **round14** (10 bài): Strait Crossing có trong danh sách, có mô tả, chơi được; Xưởng tàu ven eo biển, đặt sản
+  xuất tàu đổ bộ; chọn 1 xe tăng + 3 lính + 1 xe tăng hạng nặng rồi "chuột phải" vào tàu → xe tăng + 3 lính lên (6 chỗ), xe hạng nặng ở
+  lại bờ; bảng chọn hiện "6/6 chỗ"; bấm U ngoài khơi bị từ chối kèm gợi ý "sát bờ hơn"; tới bãi bờ nam bấm U → cả 4 lên bờ; mô tả tiếng Việt.
+- Chỉnh sau khi xem ảnh: câu gợi ý khi tàu trống và mô tả tàu đổ bộ quá dài, bị xuống dòng / cắt trong bảng chọn → rút gọn.
+- Kết quả 15 bộ × 3 trình duyệt (Chrome, Edge, Firefox) = 45 lượt: **tất cả PASS ngay lần đầu, 0 lỗi console**. (Đã tăng thời gian chờ
+  khởi động trình duyệt lên 120 giây sau lần Firefox mở chậm ở đợt 13; bỏ script `flow` cũ khỏi bộ chạy.)
+- Tài liệu cập nhật v0.14: CHANGELOG, README, GAMEPLAY_SYSTEMS §5q, AI_DESIGN §6l, TESTING, DEVELOPMENT_ROADMAP, PLAN_STATUS; menu ghi v0.14.
+
+## Tổng kết đợt 14
+- Đã xong: **tàu đổ bộ** chở cả bộ binh lẫn xe (tính theo chỗ ngồi), **AI đổ bộ** đánh vào gần căn cứ địch, **map Strait Crossing**.
+- Chất lượng: 176 unit test, 15 bộ test trình duyệt PASS trên Chrome / Edge / Firefox.
+- Còn lại (offline, tùy chọn): tàu ngầm (cần cơ chế tàng hình), AI dùng hạm đội như lực lượng riêng (săn tàu địch, phong tỏa); map biển
+  thêm vào trình sửa map đã có (cọ Nước có sẵn) nhưng chưa có kiểm tra "có biển đủ lớn" cho map tự làm.
+  Không làm được trên trình duyệt: nút Thoát, chọn độ phân giải. Tạm hoãn theo yêu cầu: online, đồ họa / âm thanh thật.
+
+---
+
+## Đợt 15 — kế hoạch (chơi offline với máy)
+
+| # | Công việc | Mục PLAN | Trạng thái |
+|---|---|---|---|
+| 15.1 | **Tàu ngầm**: lặn (địch không thấy trừ khi tàu ở gần dò được hoặc vừa phóng ngư lôi), ngư lôi chỉ đánh tàu; chỉ Tàu tuần tra (bom chìm) và tàu ngầm đánh được tàu ngầm — tạo vòng khắc chế khu trục > tuần tra, tàu ngầm > khu trục, tuần tra > tàu ngầm | §4 hải quân | ✅ |
+| 15.2 | **AI dùng hạm đội như lực lượng riêng**: săn tàu địch, pháo kích công trình ven biển, giữ vùng biển nhà; AI đóng tàu ngầm khi thấy chiến hạm địch | AI | ✅ |
+| 15.3 | **Trình sửa map: kiểm tra biển** — báo vùng biển lớn nhất và căn cứ nào xây được Xưởng tàu | §6 | ✅ |
+| 15.4 | Kiểm tra (unit test + Chrome / Edge / Firefox), tài liệu | — | ✅ |
+
+## Nhật ký đợt 15
+
+### ✅ 15.1 Tàu ngầm
+- Unit mới ở Xưởng tàu: **Tàu ngầm** (1300, cần Research Center, 450 máu). Luôn lặn: **địch không thấy** (không hiện trên màn hình,
+  minimap, không bị nhắm bắn) trừ khi:
+  - có **sonar** của địch trong 7 ô (Tàu tuần tra, hoặc tàu ngầm khác), hoặc
+  - bất kỳ unit / công trình nào của địch ở sát trong 2 ô, hoặc
+  - nó **vừa phóng ngư lôi** (lộ 2 giây).
+- **Ngư lôi** (tầm 6) chỉ đánh được tàu. Tàu ngầm chỉ bị đánh bởi vũ khí săn ngầm: **bom chìm của Tàu tuần tra** (sát thương ×6 với tàu
+  ngầm) và ngư lôi của tàu ngầm khác. Pháo, xe tăng, máy bay, pháo khu trục không làm gì được nó; nổ lan cũng không trúng.
+- Tạo **vòng khắc chế hải quân** (đã kiểm chứng bằng mô phỏng 1 đấu 1): tàu ngầm thắng khu trục, tàu tuần tra thắng tàu ngầm, khu trục thắng
+  tàu tuần tra. Phải chỉnh cân bằng một lần: ban đầu tàu ngầm thắng cả tàu tuần tra → tăng hệ số bom chìm 3,5 → 6 và giãn nhịp ngư lôi 70 → 80.
+- Hình vẽ: thân thuôn sát mặt nước, tháp chỉ huy, kính tiềm vọng, vệt sóng; tàu ngầm của mình vẽ **mờ** (đang lặn). Icon, tên / mô tả tiếng Việt.
+- Test: game-core +3 (ai nhắm được tàu ngầm, ngư lôi không đánh xe tăng / công trình; ẩn trước khu trục cách 7 ô dù trong tầm nhìn, lộ trước
+  sonar tàu tuần tra cách 6,5 ô, ẩn lại khi tàu tuần tra mất, lộ 2 giây sau khi phóng; vòng khắc chế 3 trận 1–1).
+- Ghi chú: một lần chạy `pnpm -r test` báo game-data hỏng (18/23, không in tên bài lỗi); chạy riêng và chạy lại toàn bộ 2 lần đều 23/23 —
+  chưa tìm ra nguyên nhân, sẽ để ý ở các lần chạy sau.
+
+### ✅ 15.2 AI dùng hạm đội như lực lượng riêng
+- Chiến hạm của AI (khu trục, tuần tra, tàu ngầm) **không còn đi chung với quân bộ** mà thành một hạm đội riêng, mỗi lượt suy nghĩ chọn
+  theo thứ tự ưu tiên:
+  1. **Giao chiến** với tàu địch gần nhất đang thấy.
+  2. **Giữ bờ**: địch ở gần công trình của AI mà tàu áp sát được (bãi biển trong 8 ô) → kéo tới đó.
+  3. **Pháo kích bờ biển**: có ≥ 3 chiến hạm và đã qua mốc tấn công đầu → tới vùng nước gần công trình địch đã biết (trong 12 ô, vừa tầm
+     pháo khu trục 13).
+  4. Không có việc → về **vịnh nhà** (cạnh Xưởng tàu).
+- Sản xuất: tối đa 6 chiến hạm; khu trục trước, luôn có ít nhất 1 tàu tuần tra (sonar săn ngầm); **đóng tàu ngầm khi đã thấy chiến hạm
+  địch**.
+- Lần đầu chạy test, hạm đội không pháo kích vì chỉ tìm bãi trong 9 ô quanh mục tiêu (HQ trên Coastal Front cách nước gần nhất > 9 ô)
+  → nới lên 12 ô.
+- Test: game-ai +2 (2 khu trục + tàu tuần tra canh đánh chìm khu trục địch giữa biển; 3 khu trục pháo kích HQ địch đã biết, mọi tàu vẫn ở trên nước).
+
+### ✅ 15.3 Trình sửa map: kiểm tra biển
+- Dưới dòng kiểm tra "map chơi được", trình sửa map hiện thêm dòng **⚓ Hải quân**: "biển rộng N ô; xây được Xưởng tàu ở vị trí 1, 3…"
+  hoặc "chưa có cảng — cần vùng biển từ 300 ô nước giáp đất trống gần một vị trí xuất phát". Cập nhật ngay khi vẽ.
+- Vị trí có cảng = có chỗ 3×3 đất trống (không quặng) trong 14 ô quanh điểm xuất phát, sát ≥ 2 ô nước thuộc một vùng biển ≥ 300 ô.
+  Ngưỡng 300 ô giờ là hằng số dùng chung với AI (AI chỉ làm hải quân khi có biển như vậy) nên trình sửa map báo đúng điều AI sẽ làm.
+- Chỉ là thông tin, không chặn việc lưu / chơi map. Tiếng Việt đầy đủ.
+- Test: game-data +1 (Coastal Front, Strait Crossing có cảng ở cả 4 vị trí và biển ≥ 300 ô; Highland Pass không có nước; hồ nhỏ ở Desert
+  Storm không tính là biển).
+
+### ✅ 15.4 Kiểm tra, trình duyệt, tài liệu
+- `pnpm check`: typecheck ✅, lint ✅, test **182/182** (game-data 24, game-core 136, game-ai 19, server 3) ✅, build ✅.
+- Bộ test trình duyệt mới **round15** (7 bài): trình sửa map hiện dòng ⚓ Hải quân (map trống: chưa có cảng; có cả bản tiếng Việt);
+  đóng được tàu ngầm khi có Research Center; tàu ngầm địch nằm trong vùng nhìn của khu trục ta nhưng **không hiện**; thả tàu tuần tra
+  vào gần → sonar làm lộ và tàu tuần tra đánh chìm nó; bảng chọn hiện Tàu ngầm.
+  Hai bài hỏng ở lần chạy đầu đều do test: tàu ngầm địch đặt trong tầm ngư lôi nên phóng vào khu trục và tự lộ (đúng luật) → dời ra
+  ngoài tầm; nút menu tiếng Việt là "Trình sửa bản đồ". Bỏ một bài "không hiện trên minimap" vì bài đó không thực sự kiểm tra gì.
+- Xem ảnh: tàu ngầm địch không được vẽ; tàu ngầm của mình vẽ mờ. Mô tả tàu ngầm bị cắt dòng cuối trong bảng chọn → rút gọn.
+- Kết quả 16 bộ × 3 trình duyệt (Chrome, Edge, Firefox) = 48 lượt: **tất cả PASS, 0 lỗi console**.
+- Tài liệu cập nhật v0.15: CHANGELOG, README, GAMEPLAY_SYSTEMS §5r, AI_DESIGN §6m, TESTING, DEVELOPMENT_ROADMAP, PLAN_STATUS; menu ghi v0.15.
+
+## Tổng kết đợt 15
+- Đã xong: **tàu ngầm** (tàng hình, sonar, vòng khắc chế hải quân), **AI điều hạm đội riêng** (giao chiến tàu, giữ bờ, pháo kích, đóng
+  tàu ngầm khi thấy chiến hạm địch), **kiểm tra cảng / biển trong trình sửa map**.
+- Chất lượng: 182 unit test, 16 bộ test trình duyệt PASS trên Chrome / Edge / Firefox.
+- Hải quân giờ đã đủ bộ cơ bản (4 loại tàu + tàu đổ bộ, 2 map biển, AI dùng đầy đủ). Hướng tiếp theo có thể là: thêm nhiệm vụ chiến
+  dịch trên biển, cân bằng lại hải quân qua các trận AI-vs-AI dài, hoặc mục khác trong PLAN (offline). Không làm được trên trình duyệt:
+  nút Thoát, chọn độ phân giải. Tạm hoãn theo yêu cầu: online, đồ họa / âm thanh thật.
+
+---
+
+## Đợt 16 — kế hoạch (chơi offline với máy)
+
+| # | Công việc | Mục PLAN | Trạng thái |
+|---|---|---|---|
+| 16.1 | **Nhiệm vụ chiến dịch 5 "Tidewater"** trên Strait Crossing: xây Xưởng tàu, đánh chìm tàu địch, đổ bộ chiếm bờ nam, tiêu diệt địch | §2 Campaign | ✅ |
+| 16.2 | **Map ngẫu nhiên có biển**: ô "Biển" trong thiết lập khi chọn map ngẫu nhiên (seed cũ giữ nguyên khi tắt) | §6 | ✅ |
+| 16.3 | **Mô phỏng cân bằng hải quân AI-vs-AI** trên các map biển (nhiều seed): thống kê, chỉnh nếu lệch | cân bằng | ⏳ |
+| 16.4 | Kiểm tra (unit test + Chrome / Edge / Firefox), tài liệu | — | ⏳ |
+
+## Nhật ký đợt 16
+
+### ✅ 16.1 Nhiệm vụ chiến dịch 5 "Tidewater" (Thủy triều)
+- Nhiệm vụ thứ 5, mở khóa sau Highland Siege. Map **Strait Crossing**, người chơi ở bờ bắc, đối thủ **Southern Fleet** (Pacific, Normal) ở
+  bờ nam, 8000 tiền. Mục tiêu (không theo thứ tự): **xây Xưởng tàu**, **đánh chìm 3 tàu địch**, **chiếm Bờ Nam** (đổ bộ bằng tàu đổ bộ),
+  **tiêu diệt toàn bộ địch**. Lời dẫn nhắc vòng khắc chế hải quân và tàu ngầm. Toàn bộ chữ có tiếng Việt.
+- Thống kê mới mỗi người chơi: **số tàu bị mất** (dùng cho mục tiêu đánh chìm tàu).
+- Khi thử AI đối thủ (3 seed, 14 phút) phát hiện **AI Normal xây Xưởng tàu nhưng không đóng tàu nào**: luật "giữ sản xuất trước đợt tấn
+  công đầu" chặn luôn Xưởng tàu, sau đó quân bộ chiếm hết giới hạn quân số. Sửa:
+  - Xưởng tàu vẫn sản xuất khi AI đang giữ quân bộ (hạm đội là lực lượng riêng).
+  - Khi gần chạm giới hạn quân số (còn < 12) mà chưa có 3 chiến hạm, AI tạm dừng sản xuất quân bộ để dành chỗ cho tàu.
+  Sau khi sửa: cả 3 seed AI đều có tàu tuần tra (và tàu đổ bộ ở 2 seed). AI Normal chưa có khu trục / tàu ngầm vì độ khó này không xây
+  Research Center (như trước).
+- Test: game-core +1 (mở khóa theo thứ tự; người chơi ở bờ bắc, địch bờ nam; Xưởng tàu → mục tiêu 1; 2 tàu + 1 xe tăng chết chưa đủ, tàu
+  thứ 3 thì đủ; chiếm Bờ Nam), game-ai +1 (AI vẫn đóng tàu trong lúc giữ quân).
+
+### ✅ 16.2 Map ngẫu nhiên có biển
+- Khi chọn **map ngẫu nhiên**, thiết lập trận có ô **🌊 Biển** (được nhớ cho lần sau). Bật lên: map có **biển nội địa ở giữa** (bờ cát) và
+  **vịnh ăn tới từng căn cứ** để xây Xưởng tàu; tên map thêm chữ "Coast", điểm chiến lược giữa map được bỏ (vì là biển).
+- Dùng luồng ngẫu nhiên riêng: **tắt biển thì mọi seed cũ cho ra đúng map cũ**. Nếu 30 lần tạo đều không hợp lệ thì dùng Coastal Front
+  (thay vì Desert Storm) — test 25 seed không seed nào phải dùng dự phòng.
+- Mô tả map ngẫu nhiên giờ được dịch tiếng Việt cho **mọi seed** (trước chỉ dịch được seed 1), cả bản có biển.
+- Test: game-data +1 (25 seed có biển: chơi được, biển ≥ 300 ô, cả 4 vị trí xây được Xưởng tàu, không có điểm "Centre"; cùng seed không
+  biển vẫn có "Centre"), game-core +1 (trận với `mapSea` ra bản Coast, không `mapSea` ra bản thường).

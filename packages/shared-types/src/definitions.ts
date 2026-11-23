@@ -2,7 +2,7 @@ import type { BuildingTypeId, FactionId, MapId, ResearchId, UnitTypeId } from '.
 
 export type ArmorClass = 'infantry' | 'light' | 'heavy' | 'air' | 'building';
 export type WeaponType = 'bullet' | 'shell' | 'rocket' | 'artillery' | 'missile';
-export type UnitCategory = 'infantry' | 'armored' | 'artillery' | 'air';
+export type UnitCategory = 'infantry' | 'armored' | 'artillery' | 'air' | 'naval';
 
 export interface WeaponDef {
   type: WeaponType;
@@ -20,6 +20,10 @@ export interface WeaponDef {
   canTargetAir: boolean;
   /** Incendiary: targets hit keep burning (damage per second for `seconds`). */
   burn?: { dps: number; seconds: number };
+  /** v0.15: can hit submerged submarines, with this damage multiplier against them. */
+  antiSub?: number;
+  /** v0.15: torpedoes — only ships (naval units) can be hit. */
+  navalOnly?: boolean;
 }
 
 export interface UnitDef {
@@ -48,12 +52,14 @@ export interface UnitDef {
   look?: UnitTypeId;
   /** Unarmed support: heals / repairs nearby friendlies automatically. */
   support?: SupportDef;
-  /** Carries infantry (APC, transport helicopter). */
-  transport?: { capacity: number };
+  /** Carries infantry (APC, transport helicopter). Capacity is in seats: infantry take 1, vehicles 3 (v0.14). */
+  transport?: { capacity: number; /** v0.14: also carries ground vehicles (Landing Craft). */ vehicles?: boolean };
   /** Can deploy into this building where it stands (Mobile Command Vehicle). */
   deploysTo?: BuildingTypeId;
   /** Carries smoke grenades (ability, see BALANCE.smoke*). */
   smoke?: boolean;
+  /** v0.15: sails submerged — hidden from enemies except at sonar / close range or right after firing. */
+  submarine?: boolean;
 }
 
 export interface SupportDef {
@@ -85,6 +91,8 @@ export interface BuildingDef {
   income?: number;
   /** Must be placed touching ore tiles. */
   needsOre?: boolean;
+  /** v0.13: must be placed on the shore (touching water); produced ships launch into that water. */
+  needsWater?: boolean;
   produces?: boolean;
   /** Infantry can garrison inside; the weapon only fires while occupied (damage × occupants). */
   garrison?: { capacity: number };

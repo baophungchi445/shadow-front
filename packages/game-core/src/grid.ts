@@ -67,51 +67,104 @@ export class NavGrid {
 
   /** Breadth-first ring search for the nearest walkable tile to (tx, ty). */
   nearestWalkable(tx: number, ty: number, maxRadius = 24): { x: number; y: number } | null {
-    tx = Math.max(0, Math.min(this.width - 1, Math.floor(tx)));
-    ty = Math.max(0, Math.min(this.height - 1, Math.floor(ty)));
-    if (this.walkable(tx, ty)) return { x: tx, y: ty };
-    for (let r = 1; r <= maxRadius; r++) {
-      let best: { x: number; y: number } | null = null;
-      let bestD = Infinity;
-      for (let j = -r; j <= r; j++)
-        for (let i = -r; i <= r; i++) {
-          if (Math.max(Math.abs(i), Math.abs(j)) !== r) continue;
-          const x = tx + i;
-          const y = ty + j;
-          if (!this.walkable(x, y)) continue;
-          const d = i * i + j * j;
-          if (d < bestD) {
-            bestD = d;
-            best = { x, y };
-          }
-        }
-      if (best) return best;
-    }
-    return null;
+    return nearestBy(this, tx, ty, maxRadius);
   }
 
   /**
    * Distinct walkable tiles spiralling outward from (tx, ty); used to spread group-move destinations.
    */
   spreadTiles(tx: number, ty: number, count: number): { x: number; y: number }[] {
-    const out: { x: number; y: number }[] = [];
-    const origin = this.nearestWalkable(tx, ty);
-    if (!origin) return out;
-    for (let r = 0; out.length < count && r < 20; r++) {
-      const ring: { x: number; y: number; d: number }[] = [];
-      for (let j = -r; j <= r; j++)
-        for (let i = -r; i <= r; i++) {
-          if (Math.max(Math.abs(i), Math.abs(j)) !== r) continue;
-          const x = origin.x + i;
-          const y = origin.y + j;
-          if (this.walkable(x, y)) ring.push({ x, y, d: i * i + j * j });
-        }
-      ring.sort((a, b) => a.d - b.d);
-      for (const t of ring) {
-        if (out.length >= count) break;
-        out.push({ x: t.x, y: t.y });
-      }
-    }
-    return out;
+    return spreadBy(this, tx, ty, count);
   }
+
+  /** Navigation view for ships (v0.13): only open water is passable. */
+  water(): WaterNav {
+    return new WaterNav(this);
+  }
+}
+
+/** What pathfinding and move-spreading need from a navigation layer (land grid or water view). */
+export interface Nav {
+  readonly width: number;
+  readonly height: number;
+  readonly version: number;
+  inBounds(tx: number, ty: number): boolean;
+  walkable(tx: number, ty: number): boolean;
+  nearestWalkable(tx: number, ty: number, maxRadius?: number): { x: number; y: number } | null;
+  spreadTiles(tx: number, ty: number, count: number): { x: number; y: number }[];
+}
+
+/** Water-only view over a NavGrid: ships sail on water tiles and nowhere else (v0.13). */
+export class WaterNav implements Nav {
+  constructor(private readonly grid: NavGrid) {}
+  get width(): number {
+    return this.grid.width;
+  }
+  get height(): number {
+    return this.grid.height;
+  }
+  get version(): number {
+    return this.grid.version;
+  }
+  inBounds(tx: number, ty: number): boolean {
+    return this.grid.inBounds(tx, ty);
+  }
+  walkable(tx: number, ty: number): boolean {
+    return this.grid.tile(tx, ty) === 'water';
+  }
+  /** Ships sent inland head for the closest water, however far (the search is still bounded by the map). */
+  nearestWalkable(tx: number, ty: number, maxRadius = 64): { x: number; y: number } | null {
+    return nearestBy(this, tx, ty, maxRadius);
+  }
+  spreadTiles(tx: number, ty: number, count: number): { x: number; y: number }[] {
+    return spreadBy(this, tx, ty, count);
+  }
+}
+
+type Walk = Pick<Nav, 'width' | 'height' | 'walkable'>;
+
+function nearestBy(g: Walk, tx: number, ty: number, maxRadius: number): { x: number; y: number } | null {
+  tx = Math.max(0, Math.min(g.width - 1, Math.floor(tx)));
+  ty = Math.max(0, Math.min(g.height - 1, Math.floor(ty)));
+  if (g.walkable(tx, ty)) return { x: tx, y: ty };
+  for (let r = 1; r <= maxRadius; r++) {
+    let best: { x: number; y: number } | null = null;
+    let bestD = Infinity;
+    for (let j = -r; j <= r; j++)
+      for (let i = -r; i <= r; i++) {
+        if (Math.max(Math.abs(i), Math.abs(j)) !== r) continue;
+        const x = tx + i;
+        const y = ty + j;
+        if (!g.walkable(x, y)) continue;
+        const d = i * i + j * j;
+        if (d < bestD) {
+          bestD = d;
+          best = { x, y };
+        }
+      }
+    if (best) return best;
+  }
+  return null;
+}
+
+function spreadBy(g: Walk & Pick<Nav, 'nearestWalkable'>, tx: number, ty: number, count: number) {
+  const out: { x: number; y: number }[] = [];
+  const origin = g.nearestWalkable(tx, ty);
+  if (!origin) return out;
+  for (let r = 0; out.length < count && r < 20; r++) {
+    const ring: { x: number; y: number; d: number }[] = [];
+    for (let j = -r; j <= r; j++)
+      for (let i = -r; i <= r; i++) {
+        if (Math.max(Math.abs(i), Math.abs(j)) !== r) continue;
+        const x = origin.x + i;
+        const y = origin.y + j;
+        if (g.walkable(x, y)) ring.push({ x, y, d: i * i + j * j });
+      }
+    ring.sort((a, b) => a.d - b.d);
+    for (const t of ring) {
+      if (out.length >= count) break;
+      out.push({ x: t.x, y: t.y });
+    }
+  }
+  return out;
 }

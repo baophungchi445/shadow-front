@@ -34,7 +34,7 @@ export function updateFlags(world: World): void {
     let toucher: Unit | null = null;
     let ownTouch = false;
     world.spatial.query(f.x, f.y, r + 1, (e) => {
-      if (e.kind !== 'unit' || e.dead || e.air || Math.hypot(e.x - f.x, e.y - f.y) > r) return;
+      if (e.kind !== 'unit' || e.dead || e.air || e.naval || Math.hypot(e.x - f.x, e.y - f.y) > r) return;
       if (e.team === f.team) ownTouch = true;
       else if (!toucher) toucher = e;
     });

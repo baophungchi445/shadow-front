@@ -61,6 +61,8 @@ export interface Unit extends EntityBase {
   type: UnitTypeId;
   def: UnitDef;
   air: boolean;
+  /** v0.13: ships move on water tiles only (see `World.navFor`). */
+  naval: boolean;
   speed: number;
   radius: number;
   prevX: number;
@@ -172,6 +174,8 @@ export interface PlayerStats {
   kills: number;
   creditsEarned: number;
   creditsSpent: number;
+  /** v0.16: ships (naval units) lost — campaign objectives. */
+  shipsLost?: number;
   /** Per unit type: units produced and enemies destroyed by units of that type (unit mastery, v0.11). */
   byUnit: Partial<Record<UnitTypeId, { built: number; kills: number }>>;
 }

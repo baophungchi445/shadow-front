@@ -24,11 +24,11 @@ Ký hiệu: ✅ đã có · 🟡 có một phần · ⬜ chưa làm (offline đ�
 
 ## 6. Map System
 
-✅ Desert Storm, Urban Conflict (+ River Crossing, Highland Pass), chọn map, xem trước, đặt tài nguyên, spawn, điểm chiến lược, chướng ngại, đường, cầu, sông, Fog of War, map tự làm qua Tiled · ✅ Random Map · ✅ Forest Warfare, Snowfield, Island Conflict, Industrial Zone (địa hình rừng, tuyết) · ✅ map editor trong game (đợt 9.2) · ✅ độ cao địa hình (đồi), môi trường phá hủy được (rừng / nhà) (đợt 12.1–12.2)
+✅ Desert Storm, Urban Conflict (+ River Crossing, Highland Pass), chọn map, xem trước, đặt tài nguyên, spawn, điểm chiến lược, chướng ngại, đường, cầu, sông, Fog of War, map tự làm qua Tiled · ✅ Random Map · ✅ Forest Warfare, Snowfield, Island Conflict, Industrial Zone (địa hình rừng, tuyết) · ✅ map editor trong game (đợt 9.2; kiểm tra cảng / biển, đợt 15.3) · ✅ độ cao địa hình (đồi), môi trường phá hủy được (rừng / nhà) (đợt 12.1–12.2) · ✅ đồi vẽ nổi, unit đứng trên mặt đồi (đợt 13.2) · ✅ Coastal Front (biển, đợt 13.4), Strait Crossing (eo biển, đợt 14.3)
 
 ## 7. Base Building
 
-✅ HQ, Power Plant, Barracks, War Factory, Airfield, Research Center, Defense Tower (Turret), SAM Site, Resource Extractor (≈ Refinery), đặt công trình, xây, sửa, phá hủy, điều kiện tiên quyết, điện, hàng chờ sản xuất · ✅ Radar Station, Wall, Missile Launcher, **Sell** · ✅ Bunker (có quân trú, đợt 7.1; AI dùng từ đợt 8.1) · ✅ nâng cấp công trình Level 2 (đợt 7.2) · ✅ xoay công trình (mặt trước, đợt 12.3)
+✅ HQ, Power Plant, Barracks, War Factory, Airfield, Research Center, Defense Tower (Turret), SAM Site, Resource Extractor (≈ Refinery), đặt công trình, xây, sửa, phá hủy, điều kiện tiên quyết, điện, hàng chờ sản xuất · ✅ Radar Station, Wall, Missile Launcher, **Sell** · ✅ Bunker (có quân trú, đợt 7.1; AI dùng từ đợt 8.1) · ✅ nâng cấp công trình Level 2 (đợt 7.2) · ✅ xoay công trình (mặt trước, đợt 12.3; hình mặt trước / sau riêng, đợt 13.3) · ✅ Naval Yard (đợt 13.4)
 
 ## 8. Economy
 
@@ -38,7 +38,7 @@ Ký hiệu: ✅ đã có · 🟡 có một phần · ⬜ chưa làm (offline đ�
 
 ✅ Rifleman, Anti-Tank Infantry (≈ Rocket Soldier), MBT, Heavy Tank, APC, Scout (Recon Vehicle), Attack Helicopter, UAV (Recon Drone), Self-Propelled Artillery
 ✅ Sniper, Medic, Engineer · ✅ Special Forces (Ranger), Light Tank, IFV, Gunship, Rocket Launcher/MLRS (unit riêng của faction)
-✅ Transport Helicopter (đợt 7.1; AI thả quân từ đợt 8.1) · ✅ Mobile Command Vehicle (triển khai thành HQ tiền tuyến), Fighter Jet, Bomber (đợt 8.3) · ✅ Long-range Missile System (đợt 9.3) · ⬜ Hải quân (PLAN ghi "Future")
+✅ Transport Helicopter (đợt 7.1; AI thả quân từ đợt 8.1) · ✅ Mobile Command Vehicle (triển khai thành HQ tiền tuyến), Fighter Jet, Bomber (đợt 8.3) · ✅ Long-range Missile System (đợt 9.3) · ✅ Hải quân cơ bản: Xưởng tàu, Tàu tuần tra, Tàu khu trục, map Coastal Front (đợt 13.4) · ✅ Tàu đổ bộ chở bộ binh + xe (đợt 14.1) · ✅ Tàu ngầm (tàng hình, sonar, đợt 15.1)
 **Điều khiển:** ✅ chọn, chọn nhiều, nhóm, phím nhóm, move, attack, attack-move, hold, retreat, focus fire, đội hình rải đều, máu · ✅ **Patrol**, **kinh nghiệm / cấp bậc (veterancy)**, sửa xe (Engineer) · ✅ chở quân (APC 5, Transport Helicopter 6, Bunker 4; chuột phải để lên, phím U để xuống) · ✅ chọn kiểu đội hình: rải đều / hàng ngang / hàng dọc / mũi tên (đợt 8.4) · ✅ nâng cấp từng unit (đợt 11.1)
 
 ## 10. Combat
@@ -47,7 +47,7 @@ Ký hiệu: ✅ đã có · 🟡 có một phần · ⬜ chưa làm (offline đ�
 
 ## 11. AI
 
-✅ Xây căn cứ, quản lý tài nguyên, sản xuất, trinh sát, phòng thủ, tấn công, rút lui, chiếm lãnh thổ, chọn mục tiêu, 4 độ khó, 5 tính cách (Shadow dùng trọng số cân bằng) · ✅ Phối hợp đội: AI đồng minh cùng tấn công, gửi cứu viện (đợt 8.1) · ✅ AI dùng chở quân, Bunker, thả quân bằng trực thăng (đợt 8.1) · ✅ Cân bằng lối Rush (đợt 8.2) · ✅ AI dùng unit / công trình mới
+✅ Xây căn cứ, quản lý tài nguyên, sản xuất, trinh sát, phòng thủ, tấn công, rút lui, chiếm lãnh thổ, chọn mục tiêu, 4 độ khó, 5 tính cách (Shadow dùng trọng số cân bằng) · ✅ Phối hợp đội: AI đồng minh cùng tấn công, gửi cứu viện (đợt 8.1) · ✅ AI dùng chở quân, Bunker, thả quân bằng trực thăng (đợt 8.1) · ✅ Cân bằng lối Rush (đợt 8.2) · ✅ AI dùng unit / công trình mới · ✅ AI chiếm đồi, AI dùng hải quân (đợt 13.1, 13.4), AI đổ bộ (đợt 14.2), AI hạm đội riêng (đợt 15.2)
 
 ## 12. Multiplayer — 🌐 toàn bộ (server chỉ có quản lý phòng)
 

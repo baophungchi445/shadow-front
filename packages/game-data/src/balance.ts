@@ -88,6 +88,19 @@ export const BALANCE = {
   hillVision: 2,
   hillRange: 1,
   hillMissChance: 0.25,
+  /** v0.13: a Naval Yard needs at least this many water tiles along its edges. */
+  shoreWaterTiles: 2,
+  /** v0.14: seats a vehicle takes in a Landing Craft (infantry take 1). */
+  vehicleSeats: 3,
+  /** v0.14: a ship unloads only when open ground lies within this many tiles. */
+  beachReach: 2.5,
+  /** v0.15 submarines: hidden from enemies unless one of their sub hunters (weapon with `antiSub`) is within
+   *  `sonarRange`, anything else of theirs within `subSpotRange`, or it fired in the last `subRevealTicks`. */
+  sonarRange: 7,
+  /** v0.15: water bodies at least this large count as open sea (AI navy, map editor harbour check). */
+  navalSeaMin: 300,
+  subSpotRange: 2,
+  subRevealTicks: 40,
   /** Destructible terrain (v0.12): hit points of forest / city tiles against splash weapons (× the weapon's damage
    *  multiplier against buildings). */
   forestHp: 260,
@@ -129,6 +142,10 @@ export const UNIT_SUPPLY: Record<UnitTypeId, number> = {
   bomber: 4,
   mcv: 4,
   'missile-system': 4,
+  'patrol-boat': 2,
+  destroyer: 4,
+  'landing-craft': 2,
+  submarine: 3,
 };
 
 /** Population cap options offered in match setup (0 = unlimited) and the default. */

@@ -149,6 +149,132 @@ function buildDesertStorm(): MapDef {
   };
 }
 
+/**
+ * Coastal Front (v0.13 naval): an inland sea fills the centre with a bay reaching towards every base, so
+ * shipyards can be built at home and warships fight in open water. Ground armies go round along the coasts.
+ * Point-symmetric (the southern half mirrors the northern one).
+ */
+function buildCoastalFront(): MapDef {
+  const rnd = mulberry32(9090);
+  const b = new MapBuilder(SIZE, SIZE, 'grass');
+  // Sandy coast first, then the sea on top of it.
+  b.blob(32, 32, 16, 'sand', rnd, 0.3);
+  for (const s of SPAWNS) {
+    const c = spawnCenter(s);
+    const ex = c.x + Math.sign(32 - c.x) * 10;
+    const ey = c.y + Math.sign(32 - c.y) * 10;
+    b.line(32, 32, ex, ey, 'sand', 8);
+  }
+  b.blob(32, 32, 13, 'water', rnd, 0.3);
+  for (const s of SPAWNS) {
+    const c = spawnCenter(s);
+    const ex = c.x + Math.sign(32 - c.x) * 10;
+    const ey = c.y + Math.sign(32 - c.y) * 10;
+    b.line(32, 32, ex, ey, 'water', 4);
+  }
+  // Coastal woods and rocks on the land rim.
+  for (let k = 0; k < 10; k++) b.blob(Math.floor(rnd() * SIZE), Math.floor(rnd() * 14), 1 + rnd(), 'forest', rnd);
+  for (let k = 0; k < 6; k++) b.blob(Math.floor(rnd() * 14), 14 + Math.floor(rnd() * 18), 1 + rnd(), 'rock', rnd);
+  // Bases.
+  for (const s of SPAWNS.slice(0, 1).concat(SPAWNS[2])) b.clearCircle(s.tx + 1, s.ty + 1, 8, 'grass');
+  b.line(7, 7, 56, 7, 'road', 2);
+  b.line(7, 7, 7, 31, 'road', 2);
+  b.line(56, 7, 56, 31, 'road', 2);
+  // Ore: home fields away from the bay, contested fields on the capes.
+  b.blob(16, 6, 2.2, 'ore', rnd, 0.25);
+  b.blob(47, 6, 2.2, 'ore', rnd, 0.25);
+  b.blob(32, 5, 2.2, 'ore', rnd, 0.25);
+  b.blob(5, 22, 2, 'ore', rnd, 0.25);
+  b.blob(58, 22, 2, 'ore', rnd, 0.25);
+  // High ground on the capes.
+  const hills = mulberry32(777);
+  b.hill(24, 11, 2.2, hills);
+  b.hill(40, 11, 2.2, hills);
+  for (const s of SPAWNS) b.rect(s.tx - 1, s.ty - 1, 5, 5, 'concrete');
+  for (let y = SIZE / 2; y < SIZE; y++)
+    for (let x = 0; x < SIZE; x++) b.tiles[y * SIZE + x] = b.tiles[(SIZE - 1 - y) * SIZE + (SIZE - 1 - x)];
+  const points = [
+    { x: 32, y: 9, name: 'North Cape' },
+    { x: 31, y: 54, name: 'South Cape' },
+    { x: 9, y: 31, name: 'West Shore' },
+    { x: 54, y: 32, name: 'East Shore' },
+  ];
+  for (const p of points)
+    for (let j = -1; j <= 1; j++)
+      for (let i = -1; i <= 1; i++) if (TILE_BLOCKED[b.get(p.x + i, p.y + j) ?? 'grass']) b.set(p.x + i, p.y + j, 'grass');
+  return {
+    id: 'coastal-front',
+    name: 'Coastal Front',
+    description: 'An inland sea with a bay at every base. Build a Naval Yard and fight for the water; armies march round the coast.',
+    width: SIZE,
+    height: SIZE,
+    tiles: b.tiles,
+    oreAmount: 1300,
+    spawns: SPAWNS,
+    strategicPoints: points,
+  };
+}
+
+/**
+ * Strait Crossing (v0.14 naval): a strait splits the map into a northern and a southern shore (teams face each
+ * other across it); land armies cross only over the two isthmuses at the map's ends, ships rule the middle.
+ * Every base has a short bay. Point-symmetric.
+ */
+function buildStraitCrossing(): MapDef {
+  const rnd = mulberry32(5150);
+  const b = new MapBuilder(SIZE, SIZE, 'grass');
+  // Strait (rows 28–35, mirrored below) with beaches; isthmuses left at x < 9 and x > 54. Bays reach toward the
+  // northern bases (mirrored to the southern ones). Sand first, then water, so beaches never cut the strait.
+  const wob = (x: number) => Math.round(Math.sin(x * 0.35) * 1.2);
+  for (let x = 9; x <= 54; x++) b.rect(x, 25 + wob(x), 1, 3, 'sand');
+  b.line(15, 28, 15, 16, 'sand', 6);
+  b.line(48, 28, 48, 16, 'sand', 6);
+  for (let x = 9; x <= 54; x++) b.rect(x, 28 + wob(x), 1, 8 - wob(x), 'water');
+  b.line(15, 30, 15, 17, 'water', 3);
+  b.line(48, 30, 48, 17, 'water', 3);
+  // Woods and rocks.
+  for (let k = 0; k < 8; k++) b.blob(18 + Math.floor(rnd() * 26), 4 + Math.floor(rnd() * 16), 1 + rnd(), 'forest', rnd);
+  for (let k = 0; k < 4; k++) b.blob(1 + Math.floor(rnd() * 6), 12 + Math.floor(rnd() * 12), 0.8 + rnd(), 'rock', rnd);
+  for (const s of SPAWNS.slice(0, 1).concat(SPAWNS[2])) b.clearCircle(s.tx + 1, s.ty + 1, 7, 'grass');
+  b.line(7, 7, 56, 7, 'road', 2);
+  b.line(4, 7, 4, 31, 'road', 2);
+  b.line(59, 7, 59, 31, 'road', 2);
+  // Ore: home fields, rich contested fields on the isthmuses and the shore.
+  b.blob(16, 11, 2, 'ore', rnd, 0.25);
+  b.blob(47, 11, 2, 'ore', rnd, 0.25);
+  b.blob(4, 25, 2.2, 'ore', rnd, 0.25);
+  b.blob(59, 25, 2.2, 'ore', rnd, 0.25);
+  b.blob(32, 20, 2, 'ore', rnd, 0.25);
+  // High ground guarding each isthmus.
+  const hills = mulberry32(31337);
+  b.hill(6, 18, 1.8, hills);
+  b.hill(57, 18, 1.8, hills);
+  for (const s of SPAWNS) b.rect(s.tx - 1, s.ty - 1, 5, 5, 'concrete');
+  for (let y = SIZE / 2; y < SIZE; y++)
+    for (let x = 0; x < SIZE; x++) b.tiles[y * SIZE + x] = b.tiles[(SIZE - 1 - y) * SIZE + (SIZE - 1 - x)];
+  const points = [
+    { x: 4, y: 31, name: 'West Isthmus' },
+    { x: 59, y: 32, name: 'East Isthmus' },
+    { x: 32, y: 22, name: 'North Shore' },
+    { x: 31, y: 41, name: 'South Shore' },
+  ];
+  for (const p of points)
+    for (let j = -1; j <= 1; j++)
+      for (let i = -1; i <= 1; i++) if (TILE_BLOCKED[b.get(p.x + i, p.y + j) ?? 'grass']) b.set(p.x + i, p.y + j, 'grass');
+  return {
+    id: 'strait-crossing',
+    name: 'Strait Crossing',
+    description:
+      'A strait splits north from south. Armies cross only at the two isthmuses; warships and landing craft rule the middle.',
+    width: SIZE,
+    height: SIZE,
+    tiles: b.tiles,
+    oreAmount: 1300,
+    spawns: SPAWNS,
+    strategicPoints: points,
+  };
+}
+
 function buildUrbanConflict(): MapDef {
   const rnd = mulberry32(4242);
   const b = new MapBuilder(SIZE, SIZE, 'concrete');
@@ -263,7 +389,7 @@ export function mapIsPlayable(m: MapDef): boolean {
   });
 }
 
-function randomCandidate(seed: number): MapDef {
+function randomCandidate(seed: number, sea = false): MapDef {
   const rnd = mulberry32(seed);
   const theme = THEMES[Math.floor(rnd() * THEMES.length)];
   const b = new MapBuilder(SIZE, SIZE, theme.base);
@@ -293,6 +419,24 @@ function randomCandidate(seed: number): MapDef {
   const hr = mulberry32(seed ^ 0x5f3759df);
   for (let k = 0, n = 1 + Math.floor(hr() * 2); k < n; k++)
     b.hill(14 + Math.floor(hr() * 37), 16 + Math.floor(hr() * 12), 1.8 + hr() * 1.2, hr);
+  // Inland sea (v0.16, optional): own random stream, so maps without it are unchanged. A beach-ringed sea in the
+  // middle with a bay toward every base (drawn on the northern half like everything else, then mirrored).
+  if (sea) {
+    const sr = mulberry32(seed ^ 0x0c0a57);
+    const r = 10 + sr() * 2.5;
+    b.blob(32, 32, r + 2.5, 'sand', sr, 0.3);
+    for (const [ex, ey] of [
+      [17, 17],
+      [46, 17],
+    ])
+      b.line(32, 32, ex, ey, 'sand', 8);
+    b.blob(32, 32, r, 'water', sr, 0.3);
+    for (const [ex, ey] of [
+      [17, 17],
+      [46, 17],
+    ])
+      b.line(32, 32, ex, ey, 'water', 4);
+  }
 
   for (let y = SIZE / 2; y < SIZE; y++)
     for (let x = 0; x < SIZE; x++) b.tiles[y * SIZE + x] = b.tiles[(SIZE - 1 - y) * SIZE + (SIZE - 1 - x)];
@@ -301,7 +445,8 @@ function randomCandidate(seed: number): MapDef {
   const px = ri(12, 51);
   const py = ri(14, 22);
   const points = [
-    { x: 31, y: 31, name: 'Centre' },
+    // The centre is open sea on a coastal map: no point there.
+    ...(sea ? [] : [{ x: 31, y: 31, name: 'Centre' }]),
     { x: px, y: py, name: 'North Outpost' },
     { x: SIZE - 1 - px, y: SIZE - 1 - py, name: 'South Outpost' },
   ];
@@ -313,7 +458,9 @@ function randomCandidate(seed: number): MapDef {
   return {
     id: 'random',
     name: `Random ${theme.name} #${seed % 10000}`,
-    description: `Randomly generated ${theme.name.toLowerCase()} battlefield (seed ${seed}). Mirrored for fairness.`,
+    description: sea
+      ? `Randomly generated ${theme.name.toLowerCase()} coast with an inland sea (seed ${seed}). Mirrored for fairness.`
+      : `Randomly generated ${theme.name.toLowerCase()} battlefield (seed ${seed}). Mirrored for fairness.`,
     width: SIZE,
     height: SIZE,
     tiles: b.tiles,
@@ -323,17 +470,19 @@ function randomCandidate(seed: number): MapDef {
   };
 }
 
-/** Deterministic random map for `seed`; candidates that fail `mapIsPlayable` are re-rolled. */
-export function generateRandomMap(seed: number): MapDef {
+/** Deterministic random map for `seed` (optionally with an inland sea); candidates that fail `mapIsPlayable` are
+ *  re-rolled. */
+export function generateRandomMap(seed: number, sea = false): MapDef {
   const s0 = Math.abs(Math.floor(seed)) || 1;
   for (let attempt = 0; attempt < 30; attempt++) {
-    const m = randomCandidate(s0 + attempt * 7919);
-    if (mapIsPlayable(m)) return { ...m, name: `Random ${m.name.split(' ')[1]} #${s0 % 10000}` };
+    const m = randomCandidate(s0 + attempt * 7919, sea);
+    if (mapIsPlayable(m))
+      return { ...m, name: `Random ${m.name.split(' ')[1]}${sea ? ' Coast' : ''} #${s0 % 10000}` };
   }
-  return getMap('desert-storm');
+  return getMap(sea ? 'coastal-front' : 'desert-storm');
 }
 
-const randomCache = new Map<number, MapDef>();
+const randomCache = new Map<string, MapDef>();
 
 const cache = new Map<MapId, MapDef>();
 const builders: Record<Exclude<MapId, 'custom'>, () => MapDef> = {
@@ -346,16 +495,20 @@ const builders: Record<Exclude<MapId, 'custom'>, () => MapDef> = {
   'forest-warfare': () => parseTiledMap(forestWarfareJson as TiledMap, 'forest-warfare'),
   'island-conflict': () => parseTiledMap(islandConflictJson as TiledMap, 'island-conflict'),
   'industrial-zone': () => parseTiledMap(industrialZoneJson as TiledMap, 'industrial-zone'),
+  'coastal-front': buildCoastalFront,
+  'strait-crossing': buildStraitCrossing,
 };
 
-/** Map by id. For `random`, `mapSeed` selects the generated map. */
-export function getMap(id: MapId, mapSeed?: number): MapDef {
+/** Map by id. For `random`, `mapSeed` selects the generated map and `sea` adds an inland sea (v0.16). */
+export function getMap(id: MapId, mapSeed?: number, sea = false): MapDef {
   if (id === 'custom') throw new Error('Custom maps are passed in MatchConfig.customMap');
-  if (id === 'random' && mapSeed !== undefined) {
-    let r = randomCache.get(mapSeed);
+  if (id === 'random' && (mapSeed !== undefined || sea)) {
+    const s = mapSeed ?? 1;
+    const key = `${s}${sea ? ':sea' : ''}`;
+    let r = randomCache.get(key);
     if (!r) {
-      r = generateRandomMap(mapSeed);
-      randomCache.set(mapSeed, r);
+      r = generateRandomMap(s, sea);
+      randomCache.set(key, r);
     }
     return r;
   }

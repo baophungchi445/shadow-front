@@ -32,8 +32,9 @@ export function findPlacement(
     for (let j = -r; j <= r; j++)
       for (let i = -r; i <= r; i++) {
         if (Math.max(Math.abs(i), Math.abs(j)) !== r) continue;
-        const tx = ox + i;
-        const ty = oy + j;
+        const flip = (globalThis as { __flip?: boolean }).__flip ? -1 : 1;
+        const tx = ox + i * flip;
+        const ty = oy + j * flip;
         if (world.placementError(player, type, tx, ty)) continue;
         if (!hasClearBorder(world, tx, ty, def.w, def.h)) continue;
         return { tx, ty };
@@ -64,6 +65,29 @@ export function findExtractorSite(
   for (const c of candidates.slice(0, 12)) {
     const spot = findPlacement(world, player, 'resource-extractor', c.x, c.y, 3);
     if (spot) return spot;
+  }
+  return null;
+}
+
+/** v0.13: a Naval Yard site on the shore near our base (facing the water), or null on dry maps. */
+export function findShoreSite(
+  world: World,
+  player: PlayerId,
+  base: Building,
+): { tx: number; ty: number; facing: number } | null {
+  const W = world.map.width;
+  const candidates: { x: number; y: number; d: number }[] = [];
+  world.map.tiles.forEach((t, i) => {
+    if (t !== 'water') return;
+    const x = (i % W) + 0.5;
+    const y = Math.floor(i / W) + 0.5;
+    const d = Math.hypot(x - base.x, y - base.y);
+    if (d < 16) candidates.push({ x, y, d });
+  });
+  candidates.sort((a, b) => a.d - b.d);
+  for (const c of candidates.slice(0, 16)) {
+    const spot = findPlacement(world, player, 'naval-yard', c.x, c.y, 3);
+    if (spot) return { ...spot, facing: world.shoreFacing(spot.tx, spot.ty, 3, 3) };
   }
   return null;
 }

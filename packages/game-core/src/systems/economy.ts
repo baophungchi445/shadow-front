@@ -45,7 +45,15 @@ export function updateProduction(world: World): void {
     const exit = frontOf(b, 0.5);
     let sx = exit.x;
     let sy = exit.y;
-    if (def.category !== 'air') {
+    if (def.category === 'naval') {
+      // Ships launch into the water the yard stands on (front side first).
+      const t =
+        world.water.nearestWalkable(Math.floor(exit.x), Math.floor(exit.y), 3) ??
+        world.water.nearestWalkable(Math.floor(b.x), Math.floor(b.y), 5);
+      if (!t) continue;
+      sx = t.x + 0.5;
+      sy = t.y + 0.5;
+    } else if (def.category !== 'air') {
       // Exit through the building's front edge (see Building.facing).
       const t = world.grid.nearestWalkable(Math.floor(exit.x), Math.floor(exit.y), 6);
       if (!t) continue; // Exit blocked; retry next tick.

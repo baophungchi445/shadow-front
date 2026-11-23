@@ -54,8 +54,13 @@ export function drawBuilding(
   progress: number,
   /** Animation phase 0..1 (radar, steam, pump). */
   phase: number,
+  /** Front side (see `Building.facing`): 0 = +y, 1 = +x, 2 = -y, 3 = -x. Front details face that way (v0.13). */
+  facing = 0,
 ): void {
   const def = BUILDINGS[type];
+  // The camera sees the +x and +y faces: facings 0 / 1 show the front, 2 / 3 show the back on that face.
+  const face: Face = facing % 2 === 0 ? 'y' : 'x';
+  const back = facing >= 2;
   const { w, h } = def;
   const team = color;
   const body = mix(CONCRETE, color, 0.18);
@@ -88,6 +93,19 @@ export function drawBuilding(
       const t1 = drawPrism(g, w - 0.4, h - 0.4, 26, body, 3);
       drawPrism(g, w - 1.4, h - 1.4, 18, shade(body, 1.08), 29);
       stripe(g, t1, team);
+      {
+        const half = (face === 'x' ? w : h) / 2 - 0.2;
+        if (!back) {
+          facePanel(g, face, half, 0, 0.36, 3, 17, 0x23272b);
+          faceLine(g, face, half, 0, 0.42, 18, team);
+          faceLine(g, face, half, 0, 0.36, 10, 0x50565c);
+        } else {
+          for (const at of [-0.55, 0.55]) {
+            facePanel(g, face, half, at, 0.25, 9, 20, 0x2f3438);
+            for (let i = 0; i < 4; i++) faceLine(g, face, half, at, 0.25, 11 + i * 2.5, 0x5d646b);
+          }
+        }
+      }
       // Antenna mast and radar dish.
       const top = iso(0, 0);
       g.lineStyle(2, 0x2b2f33, 1);
@@ -145,6 +163,16 @@ export function drawBuilding(
       g.fillPoints([t1[3], t1[2], { x: ridgeB.x, y: ridgeB.y - 7 }, { x: ridgeA.x, y: ridgeA.y - 7 }], true);
       g.fillStyle(shade(OLIVE, 1.15));
       g.fillPoints([t1[0], t1[1], { x: ridgeB.x, y: ridgeB.y - 7 }, { x: ridgeA.x, y: ridgeA.y - 7 }], true);
+      {
+        const half = face === 'x' ? (w - 0.3) / 2 : (h - 0.5) / 2;
+        if (!back) {
+          facePanel(g, face, half, 0, 0.17, 3, 13, 0x2a2620);
+          faceLine(g, face, half, 0, 0.22, 14, team);
+        } else {
+          facePanel(g, face, half, -0.35, 0.12, 8, 13, 0x9fb7c2);
+          facePanel(g, face, half, 0.35, 0.12, 8, 13, 0x9fb7c2);
+        }
+      }
       // Flag.
       const f = iso(0.7, -0.7);
       g.lineStyle(1.5, 0x222222, 1);
@@ -156,22 +184,19 @@ export function drawBuilding(
     case 'war-factory': {
       const t1 = drawPrism(g, w - 0.3, h - 0.3, 24, mix(STEEL, CONCRETE, 0.4), 3);
       stripe(g, t1, team);
-      // Garage door on the front-right face.
-      const a = iso(w / 2 - 0.15, -0.6);
-      const b = iso(w / 2 - 0.15, 0.6);
-      g.fillStyle(0x24282c);
-      g.fillPoints(
-        [
-          { x: a.x, y: a.y - 3 },
-          { x: b.x, y: b.y - 3 },
-          { x: b.x, y: b.y - 20 },
-          { x: a.x, y: a.y - 20 },
-        ],
-        true,
-      );
-      g.lineStyle(1, 0x50565c, 1);
-      for (let i = 1; i < 4; i++) {
-        g.lineBetween(a.x, a.y - 3 - i * 4.5, b.x, b.y - 3 - i * 4.5);
+      const half = (face === 'x' ? w : h) / 2 - 0.15;
+      if (!back) {
+        // Garage door on the front face.
+        facePanel(g, face, half, 0, 0.6, 3, 20, 0x24282c);
+        for (let i = 1; i < 4; i++) faceLine(g, face, half, 0, 0.6, 3 + i * 4.5, 0x50565c);
+      } else {
+        // Back wall: service hatch, vent grille and an exhaust duct.
+        facePanel(g, face, half, -0.45, 0.18, 3, 12, 0x3a3f44);
+        facePanel(g, face, half, 0.3, 0.32, 12, 19, 0x2b2f33);
+        for (let i = 0; i < 3; i++) faceLine(g, face, half, 0.3, 0.32, 13.5 + i * 2, 0x5d646b);
+        const d = face === 'x' ? iso(half + 0.08, 0.3) : iso(0.3, half + 0.08);
+        g.lineStyle(3, 0x2b2f33, 1);
+        g.lineBetween(d.x, d.y - 19, d.x, d.y - 31);
       }
       // Roof vents.
       const v = iso(-0.6, -0.4);
@@ -190,9 +215,51 @@ export function drawBuilding(
       g.lineBetween(c.x - 9, c.y - 11, c.x - 3, c.y - 2);
       g.lineBetween(c.x + 3, c.y - 12, c.x + 9, c.y - 3);
       g.lineBetween(c.x - 6, c.y - 6, c.x + 6, c.y - 7);
+      // Taxi line painted towards the front (where aircraft roll out).
+      {
+        const [dx, dy] = FACING_DIR[facing] ?? FACING_DIR[0];
+        g.lineStyle(2, 0xf0d060, 0.9);
+        for (let k = 0; k < 3; k++) {
+          const t0 = 0.9 + k * 0.22;
+          const a = iso(dx * t0, dy * t0);
+          const b = iso(dx * (t0 + 0.12), dy * (t0 + 0.12));
+          g.lineBetween(a.x, a.y - 7, b.x, b.y - 7);
+        }
+      }
       // Control tower.
       drawBox(g, -1.05, -1.05, 0.55, 0.55, 0, 30, 7, mix(CONCRETE, team, 0.25));
       drawBox(g, -1.05, -1.05, 0.75, 0.75, 0, 8, 37, 0x9fc6d6);
+      break;
+    }
+    case 'naval-yard': {
+      // v0.13: concrete quay, slipway pointing out of the front, boat shed at the back and a gantry crane.
+      const [dx, dy] = FACING_DIR[facing] ?? FACING_DIR[0];
+      const sx = -dy;
+      const sy = dx;
+      const q = (a: number, b: number, z: number) => {
+        const p = iso(dx * a + sx * b, dy * a + sy * b);
+        return { x: p.x, y: p.y - z };
+      };
+      g.fillStyle(0x2e6a86, 1);
+      g.fillPoints([q(-0.2, -0.45, 3), q(1.45, -0.45, 3), q(1.45, 0.45, 3), q(-0.2, 0.45, 3)], true);
+      g.lineStyle(1, 0xd9dcd2, 0.8);
+      for (const b of [-0.45, 0.45]) {
+        const a1 = q(-0.2, b, 3);
+        const a2 = q(1.45, b, 3);
+        g.lineBetween(a1.x, a1.y, a2.x, a2.y);
+      }
+      // Boat shed on the rear half.
+      drawBox(g, -dx * 0.75, -dy * 0.75, 1.2, 2.2, Math.atan2(dy, dx), 14, 3, mix(STEEL, CONCRETE, 0.5));
+      drawBox(g, -dx * 0.75, -dy * 0.75, 1.24, 0.5, Math.atan2(dy, dx), 2, 17, team);
+      // Gantry crane over the slipway.
+      g.lineStyle(2.5, 0xe8b830, 1);
+      for (const b of [-0.55, 0.55]) {
+        const lo = q(0.6, b, 3);
+        g.lineBetween(lo.x, lo.y, lo.x, lo.y - 30);
+      }
+      const t1 = q(0.6, -0.55, 33);
+      const t2 = q(0.6, 0.55, 33);
+      g.lineBetween(t1.x, t1.y, t2.x, t2.y);
       break;
     }
     case 'research-center': {
@@ -298,6 +365,62 @@ export function drawBuilding(
       break;
     }
   }
+}
+
+type Face = 'x' | 'y';
+
+/** Unit vectors (tiles) pointing out of each building facing. */
+const FACING_DIR: [number, number][] = [
+  [0, 1],
+  [1, 0],
+  [0, -1],
+  [-1, 0],
+];
+
+/** Corners along a visible wall face: `half` tiles out from the centre, `at ± span` tiles along it. */
+function faceSpan(face: Face, half: number, at: number, span: number): [Pt, Pt] {
+  return face === 'x'
+    ? [iso(half, at - span), iso(half, at + span)]
+    : [iso(at - span, half), iso(at + span, half)];
+}
+
+/** Filled rectangle on a visible wall face (+x or +y), from height z0 to z1 px. */
+function facePanel(
+  g: Phaser.GameObjects.Graphics,
+  face: Face,
+  half: number,
+  at: number,
+  span: number,
+  z0: number,
+  z1: number,
+  color: number,
+): void {
+  const [a, b] = faceSpan(face, half, at, span);
+  g.fillStyle(color, 1);
+  g.fillPoints(
+    [
+      { x: a.x, y: a.y - z0 },
+      { x: b.x, y: b.y - z0 },
+      { x: b.x, y: b.y - z1 },
+      { x: a.x, y: a.y - z1 },
+    ],
+    true,
+  );
+}
+
+/** Horizontal line on a visible wall face at height z px. */
+function faceLine(
+  g: Phaser.GameObjects.Graphics,
+  face: Face,
+  half: number,
+  at: number,
+  span: number,
+  z: number,
+  color: number,
+): void {
+  const [a, b] = faceSpan(face, half, at, span);
+  g.lineStyle(1.5, color, 1);
+  g.lineBetween(a.x, a.y - z, b.x, b.y - z);
 }
 
 /** Team-coloured trim along the two front edges of a roof. */
@@ -489,6 +612,72 @@ export function drawUnitBody(
       g.lineBetween(4, -22, 4, -36);
       break;
     }
+    case 'patrol-boat':
+    case 'destroyer': {
+      // v0.13 ships: wake, pointed hull, deck and bridge.
+      const k = type === 'destroyer' ? 1.45 : 1;
+      const hullPts: [number, number][] = [
+        [0.55 * k, 0],
+        [0.28 * k, 0.22 * k],
+        [-0.42 * k, 0.2 * k],
+        [-0.48 * k, 0],
+        [-0.42 * k, -0.2 * k],
+        [0.28 * k, -0.22 * k],
+      ];
+      plate(g, hullPts.map(([a, b]) => [a - 0.12 * k, b * 1.5] as [number, number]), f, -1, 0xffffff, 0.22);
+      plate(g, hullPts, f, 0, shade(hull, 0.6));
+      plate(g, hullPts.map(([a, b]) => [a * 0.95, b * 0.92] as [number, number]), f, 4, shade(mix(STEEL, hull, 0.35), 1.05));
+      if (type === 'destroyer') {
+        drawBox(g, -0.4, 0, 0.36, 0.26, f, 9, 4, shade(mix(STEEL, hull, 0.3), 0.95));
+        drawBox(g, -0.45, 0, 0.16, 0.14, f, 7, 13, shade(STEEL, 0.85));
+        const m = iso(Math.cos(f) * -0.5, Math.sin(f) * -0.5);
+        g.lineStyle(1.5, 0x1e2124, 1);
+        g.lineBetween(m.x, m.y - 21, m.x, m.y - 33);
+      } else {
+        drawBox(g, -0.1, 0, 0.22, 0.2, f, 6, 4, shade(mix(STEEL, hull, 0.3), 0.95));
+        const w = iso(Math.cos(f) * -0.04, Math.sin(f) * -0.04);
+        g.fillStyle(0x9fc6d6);
+        g.fillEllipse(w.x, w.y - 9, 5, 2.5);
+      }
+      break;
+    }
+    case 'submarine': {
+      // v0.15: long dark hull barely above the water, conning tower (sail) and a periscope wake.
+      const cig: [number, number][] = [
+        [0.62, 0],
+        [0.45, 0.13],
+        [-0.45, 0.13],
+        [-0.65, 0],
+        [-0.45, -0.13],
+        [0.45, -0.13],
+      ];
+      plate(g, cig.map(([a, b]) => [a - 0.1, b * 2.2] as [number, number]), f, -1, 0xffffff, 0.12);
+      plate(g, cig, f, 1, shade(mix(0x2b3036, hull, 0.25), 0.9));
+      plate(g, cig.map(([a, b]) => [a * 0.9, b * 0.5] as [number, number]), f, 2.5, shade(mix(0x2b3036, hull, 0.4), 1.15));
+      drawBox(g, 0.12, 0, 0.2, 0.09, f, 7, 2, shade(mix(0x2b3036, hull, 0.3), 1.05));
+      const sp = iso(Math.cos(f) * 0.12, Math.sin(f) * 0.12);
+      g.lineStyle(1, 0x1e2124, 1);
+      g.lineBetween(sp.x, sp.y - 9, sp.x, sp.y - 13);
+      break;
+    }
+    case 'landing-craft': {
+      // v0.14: flat-bottomed box hull, open well deck, bow ramp and a small wheelhouse at the stern.
+      const box: [number, number][] = [
+        [0.62, 0.32],
+        [-0.55, 0.32],
+        [-0.62, 0.24],
+        [-0.62, -0.24],
+        [-0.55, -0.32],
+        [0.62, -0.32],
+      ];
+      plate(g, box.map(([a, b]) => [a - 0.15, b * 1.4] as [number, number]), f, -1, 0xffffff, 0.2);
+      plate(g, box, f, 0, shade(hull, 0.6));
+      plate(g, box, f, 5, shade(mix(STEEL, hull, 0.35), 1.0));
+      plate(g, [[0.5, 0.22], [-0.3, 0.22], [-0.3, -0.22], [0.5, -0.22]], f, 5.5, shade(STEEL, 0.55));
+      plate(g, [[0.62, 0.3], [0.5, 0.3], [0.5, -0.3], [0.62, -0.3]], f, 8, shade(hull, 0.85));
+      drawBox(g, -0.46, 0, 0.18, 0.4, f, 7, 5, shade(mix(STEEL, hull, 0.3), 0.95));
+      break;
+    }
     case 'recon-drone': {
       const z = AIR_ALTITUDE['recon-drone']!;
       g.fillStyle(0x000000, 0.18);
@@ -519,6 +708,8 @@ const NO_TOP: UnitTypeId[] = [
   'fighter-jet',
   'bomber',
   'mcv',
+  'landing-craft',
+  'submarine',
 ];
 
 export function hasTop(type: UnitTypeId): boolean {
@@ -574,6 +765,16 @@ export function drawUnitTop(
       g.lineBetween(a.x, a.y - 15, b.x, b.y - 24);
       break;
     }
+    case 'patrol-boat':
+      // Machine-gun mount on the deckhouse (turret sprite shares the hull's origin, so it sits amidships).
+      drawBox(g, 0, 0, 0.12, 0.12, t, 3, 10, dark);
+      barrel(0.32, 12, 2, 0);
+      break;
+    case 'destroyer':
+      // Main gun on top of the superstructure.
+      drawBox(g, 0, 0, 0.3, 0.26, t, 5, 13, shade(hull, 1.05));
+      barrel(0.62, 16, 3, 0.05);
+      break;
     case 'attack-helicopter': {
       const z = AIR_ALTITUDE['attack-helicopter']!;
       g.fillStyle(0xdddddd, 0.12);

@@ -35,6 +35,9 @@ v0.9: Vietnamese / English UI, in-game map editor, Long-range Missile System, bu
 v0.10: Vietnamese game data, faction buildings, smoke grenades, critical hits, AI forward bases (MCV).
 v0.11: per-unit-type upgrades, unit mastery, weather and day / night, ballistic artillery.
 v0.12: high ground (hills), destructible woods / city blocks, building facing, profile avatars.
+v0.13: navy (Naval Yard, Patrol Boat, Destroyer, Coastal Front), AI holds hills, raised hill rendering, building front / back sprites.
+v0.14: Landing Craft with seats (vehicles too), AI amphibious raids, Strait Crossing map.
+v0.15: submarines (stealth, sonar, naval counters), AI fleets, map editor harbour check.
 
 ## Rules
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Personality } from '@shadow-front/shared-types';
-import { World, type Unit } from '@shadow-front/game-core';
+import { World, getMission, type Unit } from '@shadow-front/game-core';
 import { AICommander } from './commander';
 
 /** 2v2 on Desert Storm: players 0 + 2 are allies (team 0) against 1 + 3. */
@@ -167,4 +167,156 @@ describe('AI tactics (v0.8)', () => {
     });
     expect(started || world.hasUnitUpgrade(0, 'rifleman')).toBe(true);
   });
+
+  it('parks long-range units on the nearest hill and keeps them there (v0.13)', () => {
+    const { world, ais } = setup(['warlord', 'rush']);
+    const ai = ais[0];
+    ai.state = 'buildup';
+    const hq = world.playerBuildings(0)[0];
+    world.createUnit(0, 'mobile-artillery', hq.x + 4, hq.y + 4);
+    for (let i = 0; i < 8; i++) world.createUnit(0, 'main-battle-tank', hq.x + 3 + (i % 4), hq.y + 6 + Math.floor(i / 4));
+    const onHill = () =>
+      world.playerUnits(0).filter((u) => world.grid.tile(Math.floor(u.x), Math.floor(u.y)) === 'hill');
+    run(world, [ai], 20 * 60);
+    const guards = onHill();
+    expect(guards.length).toBeGreaterThanOrEqual(2);
+    expect(guards.some((u) => u.type === 'mobile-artillery')).toBe(true);
+    expect(guards.length).toBeLessThanOrEqual(3);
+    for (const g of guards) expect(world.onHill(g)).toBe(true);
+  });
+
+  it.each(['coastal-front', 'strait-crossing'] as const)('builds a Naval Yard on %s and sends a fleet out (v0.13)', (mapId) => {
+    const world = new World({
+      mapId,
+      mission: 'annihilation',
+      startingCredits: 20000,
+      seed: 4,
+      slots: [
+        { kind: 'ai', name: 'A', faction: 'western', team: 0, difficulty: 'hard', personality: 'warlord' },
+        { kind: 'ai', name: 'B', faction: 'eastern', team: 1, difficulty: 'easy', personality: 'fortress' },
+      ],
+    });
+    const ai = new AICommander(world, 0);
+    let yard = false;
+    let ships = 0;
+    let dry = 0;
+    for (let i = 0; i < 20 * 60 * 9; i++) {
+      ai.update();
+      world.step();
+      world.players[0].credits = Math.max(world.players[0].credits, 4000);
+      if (i % 20) continue;
+      yard ||= world.playerBuildings(0).some((b) => b.type === 'naval-yard');
+      const fleet = world.playerUnits(0).filter((u) => u.naval);
+      ships = Math.max(ships, fleet.length);
+      dry += fleet.filter((u) => world.grid.tile(Math.floor(u.x), Math.floor(u.y)) !== 'water').length;
+    }
+    expect(yard).toBe(true);
+    expect(ships).toBeGreaterThanOrEqual(2);
+    expect(dry).toBe(0);
+  });
+
+  it('does not build a Naval Yard on a map without open sea (v0.13)', () => {
+    const { world, ais } = setup(['warlord', 'rush']);
+    for (let i = 0; i < 20 * 60 * 6; i++) {
+      ais[0].update();
+      world.step();
+      world.players[0].credits = Math.max(world.players[0].credits, 4000);
+    }
+    expect(world.playerBuildings(0).some((b) => b.type === 'naval-yard')).toBe(false);
+  });
+
+  it('runs an amphibious raid: loads the Landing Craft at home and lands troops near the enemy (v0.14)', () => {
+    const world = new World({
+      mapId: 'coastal-front',
+      mission: 'annihilation',
+      startingCredits: 5000,
+      seed: 4,
+      slots: [
+        { kind: 'ai', name: 'A', faction: 'western', team: 0, difficulty: 'hard', personality: 'warlord' },
+        { kind: 'ai', name: 'B', faction: 'eastern', team: 1, difficulty: 'easy', personality: 'fortress' },
+      ],
+    });
+    const ai = new AICommander(world, 0);
+    ai.state = 'buildup';
+    const hq = world.playerBuildings(0)[0];
+    const enemyHq = world.playerBuildings(1)[0];
+    // The enemy base is already scouted; a home army and a Landing Craft on the home beach.
+    (ai as unknown as Internals).known.set(enemyHq.id, { id: enemyHq.id, x: enemyHq.x, y: enemyHq.y, type: 'headquarters' });
+    for (let i = 0; i < 4; i++) world.createUnit(0, 'main-battle-tank', hq.x + 4 + i, hq.y + 5);
+    for (let i = 0; i < 6; i++) world.createUnit(0, 'rifleman', hq.x + 4 + i, hq.y + 6);
+    const sea = world.water.nearestWalkable(Math.floor(hq.x), Math.floor(hq.y))!;
+    const craft = world.createUnit(0, 'landing-craft', sea.x + 0.5, sea.y + 0.5);
+    let maxLoad = 0;
+    let landed = false;
+    run(world, [ai], 20 * 60 * 8, () => {
+      maxLoad = Math.max(maxLoad, world.seatsUsed(craft));
+      for (const e of world.drainEvents()) if (e.type === 'unloaded' && e.player === 0) landed = true;
+    });
+    expect(maxLoad).toBeGreaterThanOrEqual(4);
+    expect(landed).toBe(true);
+    // Somebody went ashore near the enemy base (on land).
+    const near = world
+      .playerUnits(0)
+      .filter((u) => !u.naval && Math.hypot(u.x - enemyHq.x, u.y - enemyHq.y) < 18);
+    expect(near.length + world.players[0].stats.unitsLost).toBeGreaterThan(0);
+  });
+
+  describe('fleet (v0.15)', () => {
+    const coastal = () => {
+      const world = new World({
+        mapId: 'coastal-front',
+        mission: 'annihilation',
+        startingCredits: 5000,
+        seed: 4,
+        slots: [
+          { kind: 'ai', name: 'A', faction: 'western', team: 0, difficulty: 'hard', personality: 'warlord' },
+          { kind: 'ai', name: 'B', faction: 'eastern', team: 1, difficulty: 'easy', personality: 'fortress' },
+        ],
+      });
+      const ai = new AICommander(world, 0);
+      ai.state = 'buildup';
+      return { world, ai };
+    };
+
+    it('engages enemy ships it can see', () => {
+      const { world, ai } = coastal();
+      const hq = world.playerBuildings(0)[0];
+      const bay = world.water.nearestWalkable(Math.floor(hq.x), Math.floor(hq.y))!;
+      for (let i = 0; i < 2; i++) world.createUnit(0, 'destroyer', bay.x + 0.5, bay.y + 0.5);
+      // An enemy destroyer cruising in the middle of the sea, in sight of a picket boat.
+      const enemy = world.createUnit(1, 'destroyer', 32.5, 32.5);
+      world.createUnit(0, 'patrol-boat', 26.5, 26.5);
+      run(world, [ai], 20 * 120);
+      expect(enemy.dead).toBe(true);
+    });
+
+    it('shells a remembered coastal building with three warships', () => {
+      const { world, ai } = coastal();
+      const hq = world.playerBuildings(0)[0];
+      const enemyHq = world.playerBuildings(1)[0];
+      (ai as unknown as Internals).known.set(enemyHq.id, { id: enemyHq.id, x: enemyHq.x, y: enemyHq.y, type: 'headquarters' });
+      const bay = world.water.nearestWalkable(Math.floor(hq.x), Math.floor(hq.y))!;
+      for (let i = 0; i < 3; i++) world.createUnit(0, 'destroyer', bay.x + 0.5, bay.y + 0.5);
+      const hp0 = enemyHq.hp;
+      run(world, [ai], 20 * 60 * 8);
+      expect(enemyHq.hp).toBeLessThan(hp0);
+      // The fleet never joined the land army: every ship is still on water.
+      for (const u of world.playerUnits(0).filter((x) => x.naval))
+        expect(world.grid.tile(Math.floor(u.x), Math.floor(u.y))).toBe('water');
+    });
+  });
+
+  it('keeps building ships while land production is held before the first attack (v0.16)', () => {
+    const world = new World(getMission('tidewater')!.config('T', 1));
+    const ai = new AICommander(world, 1);
+    let held = false;
+    for (let i = 0; i < 20 * 60 * 14; i++) {
+      ai.update();
+      world.step();
+      if (ai.lastDecision === 'holding production until first attack') held = true;
+    }
+    expect(held).toBe(true);
+    expect(world.playerUnits(1).filter((u) => u.naval && u.def.weapon).length).toBeGreaterThanOrEqual(1);
+  });
 });
+

@@ -9,7 +9,7 @@ export function pathTo(world: World, u: Unit, gx: number, gy: number): void {
   if (u.air) {
     u.path = [{ x: gx, y: gy }];
   } else {
-    u.path = findPath(world.grid, u.x, u.y, gx, gy) ?? [];
+    u.path = findPath(world.navFor(u), u.x, u.y, gx, gy) ?? [];
   }
   u.pathIndex = 0;
   u.pathVersion = world.grid.version;
@@ -39,11 +39,11 @@ export function orderMove(
   attackMove: boolean,
   retreat = false,
 ): void {
-  const ground = units.filter((u) => !u.air);
   const air = units.filter((u) => u.air);
-
-  if (ground.length) {
-    const slots = world.grid.spreadTiles(Math.floor(x), Math.floor(y), ground.length);
+  // Land units and ships spread over their own kind of tile (v0.13).
+  for (const ground of [units.filter((u) => !u.air && !u.naval), units.filter((u) => u.naval)]) {
+    if (!ground.length) continue;
+    const slots = (ground[0].naval ? world.water : world.grid).spreadTiles(Math.floor(x), Math.floor(y), ground.length);
     // Greedy assignment: the unit farthest from the target picks first, taking the slot nearest to itself.
     const sorted = [...ground].sort((a, b) => Math.hypot(b.x - x, b.y - y) - Math.hypot(a.x - x, a.y - y));
     const free = slots.slice();
@@ -116,8 +116,8 @@ export function orderFormation(
   attackMove: boolean,
   kind: Exclude<Formation, 'spread'>,
 ): void {
-  const ground = units.filter((u) => !u.air);
-  const air = units.filter((u) => u.air);
+  const ground = units.filter((u) => !u.air && !u.naval);
+  const air = units.filter((u) => u.air || u.naval);
   if (air.length) orderMove(world, air, x, y, attackMove);
   if (!ground.length) return;
   // Anchor the formation on open ground when the clicked tile is blocked.
@@ -273,11 +273,12 @@ export function updateMovement(world: World): void {
     }
 
     // Re-path when buildings changed and our remaining route crosses a now-blocked tile.
+    const nav = world.navFor(u);
     if (!u.air && u.pathVersion !== world.grid.version) {
       u.pathVersion = world.grid.version;
       const blocked = u.path
         .slice(u.pathIndex)
-        .some((p) => !world.grid.walkable(Math.floor(p.x), Math.floor(p.y)));
+        .some((p) => !nav.walkable(Math.floor(p.x), Math.floor(p.y)));
       if (blocked && u.pathGoal) {
         pathTo(world, u, u.pathGoal.x, u.pathGoal.y);
         if (!u.moving) continue;
@@ -303,7 +304,7 @@ export function updateMovement(world: World): void {
     }
     const nx = u.x + (dx / d) * speed;
     const ny = u.y + (dy / d) * speed;
-    if (!u.air && !world.grid.walkable(Math.floor(nx), Math.floor(ny)) && u.pathGoal) {
+    if (!u.air && !nav.walkable(Math.floor(nx), Math.floor(ny)) && u.pathGoal) {
       pathTo(world, u, u.pathGoal.x, u.pathGoal.y);
       continue;
     }
@@ -359,7 +360,7 @@ function separate(world: World, units: Unit[]): void {
     if (u.air) {
       u.x = Math.max(0.2, Math.min(world.map.width - 0.2, nx));
       u.y = Math.max(0.2, Math.min(world.map.height - 0.2, ny));
-    } else if (world.grid.walkable(Math.floor(nx), Math.floor(ny))) {
+    } else if (world.navFor(u).walkable(Math.floor(nx), Math.floor(ny))) {
       u.x = nx;
       u.y = ny;
     }

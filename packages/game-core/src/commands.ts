@@ -112,13 +112,23 @@ export function executeCommand(world: World, cmd: Command): CommandResult {
     case 'load': {
       const carrier = world.get(cmd.carrier);
       if (!carrier || carrier.owner !== cmd.player) return fail('Invalid transport');
-      const free = world.capacityOf(carrier) - carrier.passengers.length;
-      if (free <= 0) return fail(world.capacityOf(carrier) ? 'Transport is full' : 'Cannot carry units');
-      const units = ownedUnits(world, cmd.player, cmd.units).filter(
-        (u) => u.def.category === 'infantry' && u.id !== carrier.id,
-      );
-      if (!units.length) return fail('Only infantry can get in');
-      for (const u of units.slice(0, free)) {
+      const cap = world.capacityOf(carrier);
+      if (!cap) return fail('Cannot carry units');
+      let free = cap - world.seatsUsed(carrier);
+      if (free <= 0) return fail('Transport is full');
+      const units = ownedUnits(world, cmd.player, cmd.units).filter((u) => world.canCarry(carrier, u));
+      if (!units.length)
+        return fail(carrier.kind === 'unit' && carrier.def.transport?.vehicles ? 'Only ground units can get in' : 'Only infantry can get in');
+      // Seats are handed out in selection order; units that no longer fit stay where they are.
+      const riders: typeof units = [];
+      for (const u of units) {
+        const s = world.seatsOf(u);
+        if (s > free) continue;
+        free -= s;
+        riders.push(u);
+      }
+      if (!riders.length) return fail('Transport is full');
+      for (const u of riders) {
         u.order = { type: 'board', carrier: carrier.id };
         u.targetId = null;
         pathTo(world, u, carrier.x, carrier.y);
@@ -129,6 +139,11 @@ export function executeCommand(world: World, cmd: Command): CommandResult {
       const carrier = world.get(cmd.carrier);
       if (!carrier || carrier.owner !== cmd.player) return fail('Invalid transport');
       if (!carrier.passengers.length) return fail('Nobody inside');
+      if (carrier.kind === 'unit' && carrier.naval) {
+        const t = world.grid.nearestWalkable(Math.floor(carrier.x), Math.floor(carrier.y), 4);
+        if (!t || Math.hypot(t.x + 0.5 - carrier.x, t.y + 0.5 - carrier.y) > BALANCE.beachReach)
+          return fail('Move closer to the shore to unload');
+      }
       if (carrier.kind === 'unit' && carrier.air) {
         const t = world.grid.nearestWalkable(Math.floor(carrier.x), Math.floor(carrier.y));
         if (!t || Math.hypot(t.x + 0.5 - carrier.x, t.y + 0.5 - carrier.y) > 2)

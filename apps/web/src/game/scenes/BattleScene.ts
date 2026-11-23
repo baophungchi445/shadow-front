@@ -335,7 +335,7 @@ export class BattleScene extends Phaser.Scene {
       target &&
       target.owner === c.humanId &&
       c.world.capacityOf(target) > 0 &&
-      c.selectedOwnUnits().some((u) => u.def.category === 'infantry')
+      c.selectedOwnUnits().some((u) => c.world.canCarry(target, u))
     ) {
       if (c.loadInto(target.id)) this.fx.marker(wp.x, wp.y, 0x6fc3ff);
       return;
@@ -493,9 +493,9 @@ export class BattleScene extends Phaser.Scene {
     for (const e of world.entities.values()) {
       if (e.dead) continue;
       if (e.kind === 'unit') {
-        if (!this.unitViews.has(e.id)) this.unitViews.set(e.id, new UnitView(this, e, this.colorOf(e.owner)));
+        if (!this.unitViews.has(e.id)) this.unitViews.set(e.id, new UnitView(this, e, this.colorOf(e.owner), world.map));
       } else if (!this.buildingViews.has(e.id)) {
-        this.buildingViews.set(e.id, new BuildingView(this, e, this.colorOf(e.owner)));
+        this.buildingViews.set(e.id, new BuildingView(this, e, this.colorOf(e.owner), world.map));
       }
     }
     for (const [id, v] of this.unitViews) {
@@ -824,11 +824,10 @@ export class BattleScene extends Phaser.Scene {
         );
       }
     const center = worldToScreen(tx + def.w / 2, ty + def.h / 2);
-    const facing = c.placingFacing;
+    const facing = c.facingFor(tx, ty);
     g.save();
     g.translateCanvas(center.x, center.y);
-    if (facing % 2 === 1) g.scaleCanvas(-1, 1);
-    drawBuilding(g, type, this.colorOf(c.humanId), 1, 0);
+    drawBuilding(g, type, this.colorOf(c.humanId), 1, 0, facing);
     g.restore();
     // Front arrow: where units come out / the default rally side.
     const front = frontOf({ tx, ty, w: def.w, h: def.h, facing }, 0.9);

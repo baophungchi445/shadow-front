@@ -108,3 +108,38 @@ HUD clicks not reaching the battlefield, pause stopping the simulation, surrende
   stored by `build`, units leave through the front), avatar (default, valid / damaged data).
 - Browser: `round12` suite (11 checks): avatar picker, menu badge, saved avatar, editor hill brush, hill bonuses on Desert Storm, rotate with
   R while placing (hint, facing, rally side), R still retreats otherwise, artillery burning a wood to walkable grass, Vietnamese label.
+
+## v0.13 additions
+
+- game-core: navy (Coastal Front has one open sea within 14 tiles of every spawn and is playable; Naval Yard needs the shore and faces
+  the water; ships launch on water and stay on water when sent inland; tanks cannot enter water; a destroyer shells a coastal HQ).
+- game-ai: holds the nearest hill with long-range units; builds a Naval Yard and a fleet on Coastal Front with no ship ever on land; never
+  builds one on Desert Storm.
+- Browser: `round13` suite (11 checks): Coastal Front listed and played, shore rule message, shore site near the base, Naval Yard in the
+  build panel, yard faces the water even after pressing R, Patrol Boat queued and launched on water, boat ordered inland stays on water,
+  War Factories in all four facings, Vietnamese map description. Screenshots checked: raised hills with units on the plateau, distinct
+  front / back building sprites, yard and boat.
+- All 14 suites pass on Chrome, Edge and Firefox with no console errors (one Firefox launch timed out at browser start-up; the rerun passed).
+
+## v0.14 additions
+
+- game-core: seats (infantry 1, vehicles 3; aircraft / ships never board; APC still infantry only), Landing Craft carries a tank + 3
+  riflemen across the sea, refuses to unload at open sea, lands everyone on walkable ground at a beach; passengers die with the craft;
+  Strait Crossing layout (playable, one strait within 14 tiles of every spawn, middle column cut by water, edge columns dry).
+- game-ai: amphibious raid on Coastal Front (≥ 4 seats loaded, landing, troops ashore near the enemy); Naval Yard + fleet on Strait Crossing.
+- Browser: `round14` suite (10 checks): Strait Crossing listed / described / played, Naval Yard on the strait, Landing Craft queued,
+  tank + 3 riflemen board through the right-click path (heavy tank left ashore), "6/6 seats" in the selection panel, U refused at sea
+  with a shore hint, U at the far beach lands everyone on the south shore, Vietnamese description.
+- Browser launcher: `protocolTimeout` raised to 120 s (a slow Firefox start had timed out in v0.13).
+
+## v0.15 additions
+
+- game-data: harbour check (`navalInfo`) on sea maps, a dry map and Desert Storm's small oases.
+- game-core: submarine targeting (only sub hunters; torpedoes only hit ships), detection (hidden from a destroyer 7 tiles away inside its
+  vision, revealed by Patrol Boat sonar at 6.5, hidden again when the boat is gone, revealed for 2 s after firing), naval counter
+  triangle in three 1v1 duels.
+- game-ai: fleet sinks a visible enemy destroyer; three destroyers shell a remembered coastal HQ and stay on water.
+- Browser: `round15` suite (7 checks): editor harbour check (EN / VI), Submarine built, enemy submarine hidden from a destroyer (inside
+  its fog vision), revealed by a Patrol Boat and hunted down, Submarine in the selection panel. Screenshots: hidden enemy sub, see-through
+  own sub.
+

@@ -4,11 +4,13 @@ import {
   TILE_KINDS,
   blankMap,
   customMapErrors,
+  navalInfo,
   decodeTiles,
   encodeTiles,
   toMapDef,
   type StoredMap,
 } from './customMap';
+import { getMap } from './maps';
 
 /** A simple playable 48×48 duel map: two spawns in opposite corners, ore next to each, one central point. */
 function duel(): StoredMap {
@@ -69,4 +71,37 @@ describe('custom maps', () => {
     expect(customMapErrors(toMapDef(blankMap('tiny', 16)))[0]).toMatch(/between/);
     expect(customMapErrors({ ...toMapDef(duel()), tiles: [] })).toEqual(['Map data is damaged']);
   });
+
+  it('harbour check: sea maps offer a Naval Yard at every spawn, dry maps and puddles do not (v0.15)', () => {
+    for (const id of ['coastal-front', 'strait-crossing'] as const) {
+      const n = navalInfo(getMap(id));
+      expect(n.largestSea).toBeGreaterThanOrEqual(300);
+      expect(n.harbours).toEqual([true, true, true, true]);
+    }
+    expect(navalInfo(getMap('highland-pass'))).toEqual({ largestSea: 0, harbours: [false, false, false, false] });
+    // Desert Storm's oases are water, but far too small to be a sea.
+    const d = navalInfo(getMap('desert-storm'));
+    expect(d.largestSea).toBeGreaterThan(0);
+    expect(d.harbours.some(Boolean)).toBe(false);
+  });
+
+  it('random maps with a sea: playable, open sea with a harbour at every spawn, no point in the water (v0.16)', () => {
+    let fallbacks = 0;
+    for (let seed = 1; seed <= 25; seed++) {
+      const m = getMap('random', seed, true);
+      if (m.id !== 'random') {
+        fallbacks++;
+        continue;
+      }
+      expect(m.name).toMatch(/ Coast #/);
+      const n = navalInfo(m);
+      expect(n.largestSea).toBeGreaterThanOrEqual(300);
+      expect(n.harbours).toEqual([true, true, true, true]);
+      expect(m.strategicPoints.map((p) => p.name)).not.toContain('Centre');
+      // The same seed without the sea is a different (dry-centred) map with the usual centre point.
+      expect(getMap('random', seed).strategicPoints[0].name).toBe('Centre');
+    }
+    expect(fallbacks).toBe(0);
+  });
 });
+

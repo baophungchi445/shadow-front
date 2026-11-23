@@ -136,6 +136,32 @@ MVP implements RUSH, FORTRESS, EAGLE, WARLORD (SHADOW falls back to balanced wei
 - Producers are built facing the map centre so units leave toward the front.
 - High ground and destructible terrain apply to the AI like to the player; the AI does not yet seek hills on purpose.
 
+## 6k. v0.13
+
+- **High ground**: from Normal, once ≥ 6 armed ground units are home and the minimum army stands, up to 3 long-range units (artillery
+  first, then longest range) hold the nearest hill cluster (≥ 3 tiles, within 36 tiles of the HQ). They are kept out of attack squads
+  and walk back to their tile after chasing something off the hill.
+- **Navy**: from Normal, after the War Factory, `navalMap()` checks once whether a shore site exists near the HQ whose sea is ≥ 300 tiles
+  and comes within 16 tiles of an enemy spawn. If so it builds one Naval Yard (`findShoreSite`, facing the water; outside the producer
+  limit) and keeps up to 5 ships (destroyers preferred). Ships join the home army and attack squads; orders on land targets bring them to
+  the nearest water, where they bombard the coast. Dry maps never get a yard.
+
+## 6l. v0.14
+
+- **Amphibious raids** (`manageLanding`): one Landing Craft once two warships exist. It waits on the home beach; after the first-attack
+  time, with a known enemy and ≥ 8 home ground units, it picks a beach 5–12 tiles from a known enemy building (economy first), loads the
+  nearest home units (up to 20 s), sails, unloads them as a new squad with an attack-move on the target and returns. Below 40% HP it lands
+  early. No reachable beach → no raid.
+- Units that received a `board` order this decision are removed from the home army before an attack is launched.
+
+## 6m. v0.15
+
+- **Fleet** (`manageFleet`): armed ships leave the land army. Priority each decision: nearest visible enemy ship → coastal defence (enemy
+  near our buildings with a beach within 8) → with ≥ 3 warships after the first-attack time, the water within 12 tiles of the remembered
+  enemy building closest to the sea → back to the home bay. Orders are re-issued only when the goal moves > 3 tiles or ships are idle.
+- **Production**: up to 6 warships; destroyers preferred, one patrol boat kept for sonar, submarines once enemy warships were seen
+  (`seenShips`).
+
 ## 7. Acceptance criteria
 
 - AI builds Power Plant, Extractor, Barracks, War Factory by itself.

@@ -10,13 +10,14 @@ export function updateBoarding(world: World): void {
     const o = u.order;
     if (o.type !== 'board') continue;
     const c = world.get(o.carrier);
-    if (!c || c.passengers.length >= world.capacityOf(c)) {
+    if (!c || !world.fits(c, u)) {
       u.order = { type: 'idle' };
       u.anchorX = u.x;
       u.anchorY = u.y;
       continue;
     }
-    const reach = c.kind === 'building' ? Math.max(c.w, c.h) / 2 + 1.2 : 1.4;
+    // Ships lie off the beach: troops board from the nearest shore tile (v0.14).
+    const reach = c.kind === 'building' ? Math.max(c.w, c.h) / 2 + 1.2 : c.kind === 'unit' && c.naval ? 2.6 : 1.4;
     if (Math.hypot(c.x - u.x, c.y - u.y) <= reach) {
       world.board(u, c);
       continue;

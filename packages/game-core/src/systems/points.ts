@@ -22,7 +22,7 @@ export function updateControlPoints(world: World): void {
 
     const counts = new Map<TeamId, Map<PlayerId, number>>();
     world.spatial.query(pt.x, pt.y, r + 1, (e) => {
-      if (e.kind !== 'unit' || e.dead || e.air) return;
+      if (e.kind !== 'unit' || e.dead || e.air || e.naval) return;
       if (Math.hypot(e.x - pt.x, e.y - pt.y) > r) return;
       let m = counts.get(e.team);
       if (!m) counts.set(e.team, (m = new Map()));

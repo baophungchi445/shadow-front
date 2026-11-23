@@ -57,6 +57,18 @@ export const VI_DATA: Record<string, string> = {
   'Long-range Missile System': 'Hệ thống tên lửa tầm xa',
   'Strikes ground targets 20 tiles away with incendiary missiles. Needs spotters (radar, scouts) to see that far; helpless up close.':
     'Bắn tên lửa gây cháy vào mục tiêu mặt đất cách 20 ô. Cần radar / trinh sát để thấy xa; không tự vệ được khi bị áp sát.',
+  'Patrol Boat': 'Tàu tuần tra',
+  'Fast gunboat. Machine guns hit infantry, light vehicles and aircraft; depth charges and sonar hunt submarines. Water only.':
+    'Pháo hạm nhanh. Súng máy bắn bộ binh, xe nhẹ và máy bay; bom chìm và sonar săn tàu ngầm. Chỉ đi trên nước.',
+  'Landing Craft': 'Tàu đổ bộ',
+  'Unarmed transport: 6 seats (infantry 1, vehicle 3). Unload (U) next to a beach.':
+    'Tàu chở quân không vũ khí: 6 chỗ (bộ binh 1, xe 3). Thả quân (U) cạnh bãi biển.',
+  Submarine: 'Tàu ngầm',
+  'Hidden under water; torpedoes sink ships. Revealed by nearby sonar (Patrol Boats) or when it fires.':
+    'Ẩn dưới nước; ngư lôi đánh chìm tàu. Bị lộ khi có sonar (Tàu tuần tra) ở gần hoặc khi phóng.',
+  Destroyer: 'Tàu khu trục',
+  'Armored warship. Its deck gun shells the coast from 13 tiles away. Requires Research Center.':
+    'Chiến hạm bọc thép. Pháo boong nã vào bờ từ cách 13 ô. Cần Trung tâm nghiên cứu.',
 
   // ------------------------------------------------------------ buildings
   Headquarters: 'Sở chỉ huy',
@@ -72,6 +84,9 @@ export const VI_DATA: Record<string, string> = {
   'War Factory': 'Nhà máy chiến xa',
   'Builds armored vehicles and artillery.': 'Sản xuất xe bọc thép và pháo.',
   Airfield: 'Sân bay',
+  'Naval Yard': 'Xưởng tàu',
+  'Shipyard on the shore. Builds Patrol Boats and Destroyers that sail on water.':
+    'Xưởng đóng tàu ven bờ. Sản xuất Tàu tuần tra và Tàu khu trục đi trên nước.',
   'Builds helicopters and drones.': 'Sản xuất trực thăng, máy bay và drone.',
   'Research Center': 'Trung tâm nghiên cứu',
   'Unlocks Heavy Tank and Mobile Artillery.': 'Mở khóa xe tăng hạng nặng, pháo tự hành và công nghệ.',
@@ -163,11 +178,28 @@ export const VI_DATA: Record<string, string> = {
     'Rừng rậm bị chia bởi đường mòn và khoảng trống. Phục kích khắp nơi; quân phải đi theo đường.',
   'Island bases joined by narrow sand causeways around a central isle. Aircraft rule; ground armies queue at the crossings.':
     'Căn cứ trên các đảo nối bằng đường đắp cát hẹp quanh đảo giữa. Máy bay làm chủ; quân bộ xếp hàng ở chỗ qua.',
+  'An inland sea with a bay at every base. Build a Naval Yard and fight for the water; armies march round the coast.':
+    'Biển nội địa có vịnh ăn tới từng căn cứ. Xây Xưởng tàu và tranh quyền kiểm soát mặt nước; quân bộ đi vòng theo bờ biển.',
+  'A strait splits north from south. Armies cross only at the two isthmuses; warships and landing craft rule the middle.':
+    'Eo biển chia đôi bắc và nam. Quân bộ chỉ qua được ở hai eo đất hai đầu; chiến hạm và tàu đổ bộ làm chủ khoảng giữa.',
   'Factories, rail yards and a canal. Tight streets favour infantry and close-range armor.':
     'Nhà máy, bãi đường sắt và kênh đào. Đường hẹp có lợi cho bộ binh và xe tầm gần.',
 
   // ------------------------------------------------------------ campaign
   'Boot Camp': 'Trại huấn luyện',
+  Tidewater: 'Thủy triều',
+  'Strait Crossing · naval assault': 'Strait Crossing · tấn công đường biển',
+  'The enemy holds the south shore of the strait and its fleet rules the water. The isthmuses are heavily watched, so this time we go by sea. Build a Naval Yard, win the strait, put troops ashore on the South Shore with Landing Craft and finish the enemy. Beware of submarines: only Patrol Boats can find them.':
+    'Địch giữ bờ nam eo biển và hạm đội của chúng làm chủ mặt nước. Hai eo đất bị canh gác gắt, nên lần này ta đi đường biển. Xây Xưởng tàu, giành quyền kiểm soát eo biển, dùng Tàu đổ bộ đưa quân lên Bờ Nam rồi tiêu diệt địch. Cẩn thận tàu ngầm: chỉ Tàu tuần tra mới phát hiện được chúng.',
+  'Build a Naval Yard': 'Xây Xưởng tàu',
+  'Requires a War Factory. It must touch the water: build it on the shore of your bay.':
+    'Cần Nhà máy chiến xa. Xưởng phải sát nước: xây trên bờ vịnh nhà.',
+  'Sink 3 enemy ships': 'Đánh chìm 3 tàu địch',
+  'Destroyers outgun Patrol Boats; Submarines sink Destroyers; Patrol Boats hunt Submarines.':
+    'Khu trục áp đảo Tàu tuần tra; Tàu ngầm đánh chìm Khu trục; Tàu tuần tra săn Tàu ngầm.',
+  'Capture the South Shore': 'Chiếm Bờ Nam',
+  'Load infantry and tanks into a Landing Craft (right-click it), sail across and unload (U) at the beach.':
+    'Cho bộ binh và xe tăng lên Tàu đổ bộ (chuột phải vào tàu), vượt eo biển và thả quân (U) ở bãi biển.',
   'Desert Storm · training': 'Desert Storm · huấn luyện',
   'Welcome to the front, Commander. Learn to move troops, build a base, train an army and take ground. An undefended enemy outpost sits in the far corner. Destroy it to finish your training.':
     'Chào mừng tới mặt trận, Chỉ huy. Hãy học cách điều quân, xây căn cứ, huấn luyện quân đội và chiếm đất. Một tiền đồn địch không phòng bị nằm ở góc xa. Phá hủy nó để hoàn thành khóa huấn luyện.',

@@ -1,4 +1,4 @@
-import type { NavGrid } from './grid';
+import type { Nav } from './grid';
 import { MinHeap } from './heap';
 
 export interface PathPoint {
@@ -31,7 +31,7 @@ function octile(ax: number, ay: number, bx: number, by: number): number {
  * If the goal tile is blocked the nearest walkable tile is used instead.
  */
 export function findPath(
-  grid: NavGrid,
+  grid: Nav,
   sx: number,
   sy: number,
   gx: number,

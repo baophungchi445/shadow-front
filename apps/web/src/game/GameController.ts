@@ -537,9 +537,10 @@ export class GameController {
     return this.issue({ type: 'smoke', player: this.humanId, units: units.map((u) => u.id), x, y });
   }
 
-  /** Selected infantry get into a friendly transport / bunker. */
+  /** Selected infantry (and vehicles, for a Landing Craft) get into a friendly transport / bunker. */
   loadInto(carrier: EntityId): boolean {
-    const units = this.selectedOwnUnits().filter((u) => u.def.category === 'infantry');
+    const c = this.world.get(carrier);
+    const units = c ? this.selectedOwnUnits().filter((u) => this.world.canCarry(c, u)) : [];
     if (!units.length) return false;
     return this.issue({ type: 'load', player: this.humanId, units: units.map((u) => u.id), carrier });
   }
@@ -650,6 +651,13 @@ export class GameController {
     this.placingFacing = (this.placingFacing + 1) % 4;
   }
 
+  /** Facing used for a placement at (tx, ty): shipyards always face the water (v0.13), others follow R. */
+  facingFor(tx: number, ty: number): number {
+    if (this.placing !== 'naval-yard') return this.placingFacing;
+    const def = BUILDINGS['naval-yard'];
+    return this.world.shoreFacing(tx, ty, def.w, def.h);
+  }
+
   place(tx: number, ty: number, keepPlacing = false): boolean {
     if (!this.placing) return false;
     const ok = this.issue({
@@ -658,7 +666,7 @@ export class GameController {
       building: this.placing,
       tx,
       ty,
-      facing: this.placingFacing,
+      facing: this.facingFor(tx, ty),
     });
     if (ok && !keepPlacing) this.placing = null;
     return ok;

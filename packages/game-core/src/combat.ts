@@ -10,12 +10,21 @@ export function isAir(e: Entity): boolean {
   return e.kind === 'unit' && e.air;
 }
 
+/** v0.15: a submarine (always submerged). */
+export function isSub(e: Entity): boolean {
+  return e.kind === 'unit' && !!e.def.submarine;
+}
+
 /** Final damage after counter table and faction multiplier. */
 export function computeDamage(weapon: WeaponDef, damageMul: number, target: Entity): number {
-  return weapon.damage * DAMAGE_TABLE[weapon.type][armorOf(target)] * damageMul;
+  const sub = isSub(target) ? (weapon.antiSub ?? 0) : 1;
+  return weapon.damage * DAMAGE_TABLE[weapon.type][armorOf(target)] * damageMul * sub;
 }
 
 export function canTarget(weapon: WeaponDef, target: Entity): boolean {
+  // Submarines can only be hit by sub hunters; torpedoes only hit ships.
+  if (isSub(target) && !weapon.antiSub) return false;
+  if (weapon.navalOnly && !(target.kind === 'unit' && target.naval)) return false;
   const air = isAir(target);
   if (air && !weapon.canTargetAir) return false;
   if (!air && !weapon.canTargetGround) return false;

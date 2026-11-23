@@ -194,19 +194,33 @@ function DeployRow({ name, onDeploy }: { name: string; onDeploy: () => void }) {
 }
 
 /** Passengers inside a transport / bunker with an Unload button. */
-function CargoRow({ cargo, onUnload }: { cargo: { count: number; capacity: number }; onUnload: () => void }) {
+function CargoRow({
+  cargo,
+  onUnload,
+}: {
+  cargo: { count: number; capacity: number; vehicles?: boolean };
+  onUnload: () => void;
+}) {
   const key = useApp((st) => keyLabel(st.settings.keybinds.unload));
   const t = useT();
   return (
     <div className="mt-1 flex items-center gap-2 text-xs" data-testid="cargo">
-      <span className="text-gray-300">{t('👥 {a}/{b} inside', { a: cargo.count, b: cargo.capacity })}</span>
+      <span className="text-gray-300">
+        {t(cargo.vehicles ? '👥 {a}/{b} seats taken' : '👥 {a}/{b} inside', { a: cargo.count, b: cargo.capacity })}
+      </span>
       {cargo.count > 0 ? (
         <button className="btn px-2 py-0.5 text-xs" onClick={onUnload}>
           {t('Unload')}{' '}
           <kbd className="ml-1 rounded bg-graphite-950 px-1 text-[10px] text-gray-400">{key}</kbd>
         </button>
       ) : (
-        <span className="text-gray-500">{t('select infantry, right-click here to get in')}</span>
+        <span className="text-gray-500">
+          {t(
+            cargo.vehicles
+              ? 'troops or vehicles: right-click here'
+              : 'select infantry, right-click here to get in',
+          )}
+        </span>
       )}
     </div>
   );

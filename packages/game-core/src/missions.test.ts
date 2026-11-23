@@ -25,7 +25,10 @@ describe('campaign', () => {
       'river-crossing',
       'urban-conflict',
       'highland-pass',
+      'strait-crossing',
     ]);
+    expect(missionUnlocked('tidewater', ['boot-camp', 'hold-the-river', 'iron-fist'])).toBe(false);
+    expect(missionUnlocked('tidewater', ['boot-camp', 'hold-the-river', 'iron-fist', 'highland-siege'])).toBe(true);
   });
 
   it('unordered objectives complete independently and stay complete', () => {
@@ -59,4 +62,28 @@ describe('campaign', () => {
     expect(t.update(w, 0, ui).map((o) => o.id)).toContain('hqs');
     expect(w.winningTeam).toBe(0);
   });
+
+  it('Tidewater: Naval Yard, 3 sunk enemy ships and the South Shore are tracked (v0.16)', () => {
+    const m = getMission('tidewater')!;
+    const w = new World(m.config('T', 1));
+    const t = missionTracker(m);
+    const ui = { selectedOwnUnits: 0 };
+    // The player starts on the north shore, the enemy on the south shore.
+    expect(w.playerBuildings(0)[0].y).toBeLessThan(32);
+    expect(w.playerBuildings(1)[0].y).toBeGreaterThan(32);
+    expect(t.update(w, 0, ui)).toEqual([]);
+    const hq = w.playerBuildings(0)[0];
+    w.createBuilding(0, 'naval-yard', hq.tx + 4, hq.ty, true);
+    expect(t.update(w, 0, ui).map((o) => o.id)).toEqual(['yard']);
+    // Two sunk ships and a dead tank do not count; the third ship does.
+    for (const type of ['patrol-boat', 'destroyer', 'main-battle-tank'] as const)
+      w.destroy(w.createUnit(1, type, 32.5, 32.5));
+    expect(t.update(w, 0, ui)).toEqual([]);
+    w.destroy(w.createUnit(1, 'submarine', 32.5, 32.5));
+    expect(t.update(w, 0, ui).map((o) => o.id)).toEqual(['sink']);
+    w.points.find((p) => p.name === 'South Shore')!.team = 0;
+    expect(t.update(w, 0, ui).map((o) => o.id)).toEqual(['beach']);
+    expect(t.done).toEqual([true, true, true, false]);
+  });
 });
+

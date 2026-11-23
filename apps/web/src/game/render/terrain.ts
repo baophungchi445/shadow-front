@@ -17,6 +17,32 @@ export const TILE_COLORS: Record<TileKind, number> = {
   hill: 0x9c8a5e,
 };
 
+/** Screen height (px) of a hill plateau above the plain (v0.13). */
+export const HILL_PX = 8;
+
+/**
+ * Visual ground height (px) at a world point: HILL_PX on a hill plateau, easing to 0 across the half tile
+ * around its edge, so units climbing up / down glide instead of popping (v0.13). Aircraft ignore it.
+ */
+export function groundElevation(map: { width: number; height: number; tiles: TileKind[] }, x: number, y: number): number {
+  const hill = (tx: number, ty: number) =>
+    tx >= 0 && ty >= 0 && tx < map.width && ty < map.height && map.tiles[ty * map.width + tx] === 'hill' ? 1 : 0;
+  const fx = x - 0.5;
+  const fy = y - 0.5;
+  const x0 = Math.floor(fx);
+  const y0 = Math.floor(fy);
+  const ax = fx - x0;
+  const ay = fy - y0;
+  const b =
+    hill(x0, y0) * (1 - ax) * (1 - ay) +
+    hill(x0 + 1, y0) * ax * (1 - ay) +
+    hill(x0, y0 + 1) * (1 - ax) * ay +
+    hill(x0 + 1, y0 + 1) * ax * ay;
+  if (b <= 0) return 0;
+  const t = Math.min(1, Math.max(0, (b - 0.25) / 0.5));
+  return HILL_PX * t * t * (3 - 2 * t);
+}
+
 /** Deterministic per-tile hash in [0, 1). */
 export function hash2(x: number, y: number): number {
   let h = (x * 374761393 + y * 668265263) | 0;
@@ -186,27 +212,24 @@ export function buildTerrain(scene: Phaser.Scene, world: World): TerrainLayer {
       } else if (kind === 'concrete') {
         g.lineStyle(1, 0x6f706c, 0.5);
         g.strokePoints(d, true);
-      } else if (kind === 'hill') {
-        // High ground: lit plateau with a contour line (cliff faces are drawn in a second pass).
-        g.lineStyle(1, shade(col, 1.25), 0.45);
-        g.lineBetween(cx - 14, cy - 3, cx + 12, cy - 3);
       }
     }
   }
-  // Hill edges: cliff faces drop onto lower neighbours (drawn after every tile so they are not painted over).
+  // High ground (v0.13): the plateau is raised HILL_PX above the plain, with cliff faces down to the lower
+  // neighbours. Drawn after every tile so it is not painted over; same-height plateau tiles overlap exactly.
   const isHill = (x: number, y: number) =>
     x >= 0 && y >= 0 && x < map.width && y < map.height && map.tiles[y * map.width + x] === 'hill';
+  const H = HILL_PX;
   for (let ty = 0; ty < map.height; ty++)
     for (let tx = 0; tx < map.width; tx++) {
       if (!isHill(tx, ty)) continue;
       const p = worldToScreen(tx + 0.5, ty + 0.5);
       const cx = p.x + offX;
       const cy = p.y + offY;
-      const top = { x: cx, y: cy - 16 };
-      const right = { x: cx + 32, y: cy };
-      const bottom = { x: cx, y: cy + 16 };
-      const left = { x: cx - 32, y: cy };
-      const H = 7;
+      const top = { x: cx, y: cy - 16 - H };
+      const right = { x: cx + 32, y: cy - H };
+      const bottom = { x: cx, y: cy + 16 - H };
+      const left = { x: cx - 32, y: cy - H };
       const col = TILE_COLORS.hill;
       if (!isHill(tx + 1, ty)) {
         g.fillStyle(shade(col, 0.62), 1);
@@ -216,9 +239,16 @@ export function buildTerrain(scene: Phaser.Scene, world: World): TerrainLayer {
         g.fillStyle(shade(col, 0.75), 1);
         g.fillPoints([bottom, left, { x: left.x, y: left.y + H }, { x: bottom.x, y: bottom.y + H }], true);
       }
+      g.fillStyle(shade(col, 0.94 + hash2(tx, ty) * 0.12), 1);
+      g.fillPoints([top, right, bottom, left], true);
+      // Contour line + lit rim on the edges facing away from the light.
+      g.lineStyle(1, shade(col, 1.25), 0.45);
+      g.lineBetween(cx - 14, cy - 3 - H, cx + 12, cy - 3 - H);
       g.lineStyle(1, shade(col, 1.35), 0.6);
       if (!isHill(tx - 1, ty)) g.lineBetween(left.x, left.y, top.x, top.y);
       if (!isHill(tx, ty - 1)) g.lineBetween(top.x, top.y, right.x, right.y);
+      if (!isHill(tx + 1, ty)) g.lineBetween(right.x, right.y, bottom.x, bottom.y);
+      if (!isHill(tx, ty + 1)) g.lineBetween(bottom.x, bottom.y, left.x, left.y);
     }
   // Subtle water/shore darkening.
   rt.draw(g, 0, 0);

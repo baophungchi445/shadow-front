@@ -17,6 +17,10 @@ const PATHS: Partial<Record<UnitTypeId | BuildingTypeId, string>> = {
   bomber: 'M11 3h2l1 6 9 4v2l-9-2-.5 5 3 2v1H7.5v-1l3-2-.5-5-9 2v-2l9-4Z',
   mcv: 'M2 12h18l2 3v3H2Zm3-4h9v4H5Zm11-5h1v6h-1Zm-2 2a3 2 0 0 1 6 0ZM5 18a2 2 0 1 0 4 0Zm6 0a2 2 0 1 0 4 0Zm5 0a2 2 0 1 0 4 0Z',
   'missile-system': 'M2 15h19l-2 4H4Zm2-4h12l2 4H3Zm3-1 11-7 1.4 1.6-11 7Zm4 1 9-5.5 1 1.5-9 5.5Z',
+  'patrol-boat': 'M2 14h20l-3 5H5Zm5-4h7l2 4H6Zm3-3h2v3h-2Zm4 1h6v1.3h-6Z',
+  destroyer: 'M1 14h22l-4 5H5Zm4-4h12l2 4H4Zm3-3h5v3H8Zm5 1h8v1.3h-8ZM6 4h1.4v6H6Z',
+  'landing-craft': 'M2 13h18l2 2-3 4H5Zm2-3h3v3H4Zm13-4 4 7h-2l-3-5Z',
+  submarine: 'M2 14c0-2 3-3 9-3h4l1-3h3l1 3c2 .5 3 1.5 3 3s-3 3-11 3S2 16 2 14Zm15-9h1v3h-1Z',
   sniper:
     'M10 3a2 2 0 1 1 0 4 2 2 0 0 1 0-4ZM8 8h4l1 6h-1.5l-.5 7h-2l-.5-7H7l1-6Zm4 1 10-3.5.4 1-10 3.5Zm6-2.6h1.5v2H18Z',
   medic:
@@ -40,6 +44,7 @@ const PATHS: Partial<Record<UnitTypeId | BuildingTypeId, string>> = {
   howitzer: 'M4 21v-5h14v5Zm3-5 2-4h5l1 4Zm4-3 9-9 1.4 1.4-9 9Z',
   'repair-bay': 'M3 21v-6h18v6Zm2-6V4h2v11Zm2-11 12 3-.5 1.8L7 5.8Zm10 4h1.6v5H17Z',
   'oil-derrick': 'M5 21v-3h14v3Zm3-3L12 3l4 15h-2l-2-8-2 8Zm-6-6 18-4 .4 1.6-18 4Z',
+  'naval-yard': 'M2 19h20v2H2Zm1-2 2-4h14l2 4ZM6 13V6h6v7Zm8 0V3h1.5v4H20l-4.5 3V13Z',
   bastion: 'M2 21v-9h3V9h3v3h2V9h4v3h2V9h3v3h3v9Zm8-10 10-4 .6 1.6-10 4Z',
 };
 

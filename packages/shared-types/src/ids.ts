@@ -34,7 +34,14 @@ export type UnitTypeId =
   | 'bomber'
   | 'mcv'
   // v0.9
-  | 'missile-system';
+  | 'missile-system'
+  // v0.13 naval
+  | 'patrol-boat'
+  | 'destroyer'
+  // v0.14
+  | 'landing-craft'
+  // v0.15
+  | 'submarine';
 
 export type BuildingTypeId =
   | 'headquarters'
@@ -57,7 +64,9 @@ export type BuildingTypeId =
   | 'howitzer'
   | 'repair-bay'
   | 'oil-derrick'
-  | 'bastion';
+  | 'bastion'
+  // v0.13 naval
+  | 'naval-yard';
 
 export type ResearchId =
   | 'composite-armor'
@@ -81,6 +90,8 @@ export type MapId =
   | 'forest-warfare'
   | 'island-conflict'
   | 'industrial-zone'
+  | 'coastal-front'
+  | 'strait-crossing'
   | 'random'
   /** Player-made map passed in MatchConfig.customMap. */
   | 'custom';

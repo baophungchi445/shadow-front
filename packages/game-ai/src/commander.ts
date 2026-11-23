@@ -1,5 +1,6 @@
 import type { ArmorClass, BuildingTypeId, PlayerId, TeamId, UnitTypeId } from '@shadow-front/shared-types';
 import {
+  BALANCE,
   BUILDINGS,
   RESEARCH,
   RESEARCH_IDS,
@@ -14,7 +15,7 @@ import {
   type PersonalityProfile,
 } from '@shadow-front/game-data';
 import type { Building, Unit, World } from '@shadow-front/game-core';
-import { findExtractorSite, findPlacement } from './placement';
+import { findExtractorSite, findPlacement, findShoreSite } from './placement';
 
 export type AIState = 'opening' | 'buildup' | 'attack' | 'defend';
 
@@ -101,6 +102,26 @@ export class AICommander {
   private captureTarget: number | null = null;
   /** Capture the Flag raid squad. */
   private flagRaid: number[] = [];
+  /** v0.13: small long-range post holding the nearest hill (high ground). */
+  private hillIds: number[] = [];
+  private hillPost: { x: number; y: number }[] | null = null;
+  /** v0.13: whether this map has open sea linking our shore to an enemy base (decided once). */
+  private naval: boolean | null = null;
+  /** v0.14 amphibious raid with the Landing Craft. */
+  private landing: {
+    craft: number;
+    phase: 'gather' | 'load' | 'sail';
+    tick: number;
+    home: { x: number; y: number };
+    target: { x: number; y: number } | null;
+    beach: { x: number; y: number } | null;
+  } | null = null;
+  /** v0.15: decaying count of enemy warships seen (drives submarine production). */
+  private seenShips = 0;
+  /** v0.15: where the fleet was last sent (to avoid re-issuing the same order every think). */
+  private fleetGoal: { x: number; y: number } | null = null;
+  /** Water tiles with open ground beside them (computed once). */
+  private beaches: { x: number; y: number }[] | null = null;
   /** Set once the personality build order has been completed. */
   private openingDone = false;
   /** Debug/telemetry: last decision made, shown in dev overlay. */
@@ -262,6 +283,7 @@ export class AICommander {
       if (e.kind === 'unit' && e.def.weapon) seen += e.def.cost;
       if (e.kind === 'building') this.known.set(e.id, { id: e.id, x: e.x, y: e.y, type: e.type });
       else this.seenArmor[e.def.armor] = this.seenArmor[e.def.armor] * 0.98 + 1;
+      if (e.kind === 'unit' && e.naval && e.def.weapon && !e.def.submarine) this.seenShips = this.seenShips * 0.98 + 1;
     }
     this.enemyArmy = Math.max(this.enemyArmy, seen);
     // Forget remembered buildings whose location is visible again but which are gone.
@@ -324,6 +346,8 @@ export class AICommander {
     )
       return 'bunker';
     if (this.diff.maxProducers >= 3 && this.count('research-center') < 1) return 'research-center';
+    // Sea maps: one Naval Yard on the home shore (v0.13).
+    if (this.count('naval-yard') < 1 && this.navalMap()) return 'naval-yard';
     // Defensive personalities add a long-range missile battery once they can.
     if (
       this.pers.defenses >= 2 &&
@@ -371,8 +395,13 @@ export class AICommander {
     const w = this.world;
     if (this.player.credits < BUILDINGS[type].cost) return;
     let spot: { tx: number; ty: number } | null;
+    let shoreFacing: number | null = null;
     if (type === 'resource-extractor') {
       spot = findExtractorSite(w, this.playerId, hq);
+    } else if (type === 'naval-yard') {
+      const site = findShoreSite(w, this.playerId, hq);
+      spot = site;
+      shoreFacing = site?.facing ?? null;
     } else {
       // Defenses go toward the map centre (the likely attack direction); others cluster around the HQ.
       const toward = BUILDINGS[type].weapon ? 5 : 0;
@@ -390,7 +419,9 @@ export class AICommander {
     // Producers face the middle of the map so new units come out toward the front (v0.12).
     const dx = w.map.width / 2 - (spot.tx + BUILDINGS[type].w / 2);
     const dy = w.map.height / 2 - (spot.ty + BUILDINGS[type].h / 2);
-    const facing = BUILDINGS[type].produces
+    const facing =
+      shoreFacing ??
+      (BUILDINGS[type].produces
       ? Math.abs(dx) > Math.abs(dy)
         ? dx > 0
           ? 1
@@ -398,7 +429,7 @@ export class AICommander {
         : dy > 0
           ? 0
           : 2
-      : 0;
+      : 0);
     const res = w.issue({
       type: 'build',
       player: this.playerId,
@@ -445,6 +476,22 @@ export class AICommander {
     // Faction-specific units are the faction's signature: every personality likes them.
     let s = this.pers.unitWeights[type] ?? (def.faction ? 2 : 0.3);
     if (def.deploysTo) return -1; // forward bases are a human tool for now
+    if (def.category === 'naval') {
+      const own = this.world.playerUnits(this.playerId);
+      if (def.transport) {
+        // One Landing Craft for amphibious raids (v0.14), once two warships escort the sea.
+        if (own.some((u) => u.type === type) || own.filter((u) => u.naval && u.def.weapon).length < 2) return -1;
+        return this.rnd() < 0.3 ? 100 : -1;
+      }
+      // A small fleet (up to 6 warships): destroyers first, submarines once enemy warships have been seen,
+      // patrol boats as escorts / sub hunters.
+      const fleet = own.filter((u) => u.naval && u.def.weapon);
+      if (fleet.length >= 6) return -1;
+      let score = type === 'destroyer' ? 2 : 1.5;
+      if (def.submarine) score = this.seenShips >= 1 ? 2.6 : 0.5;
+      if (type === 'patrol-boat' && fleet.filter((u) => u.type === 'patrol-boat').length < 1) score += 0.6;
+      return score * (0.75 + this.rnd() * 0.5);
+    }
     // Pure anti-air (Fighter Jet) only once enemy aircraft have been seen.
     if (def.weapon && !def.weapon.canTargetGround && this.seenArmor.air < 2) return -1;
     if (def.transport && !def.weapon) {
@@ -502,20 +549,23 @@ export class AICommander {
 
   private manageProduction(): void {
     const w = this.world;
-    // While the first attack is still held back, do not build a "deathball": stop adding combat units once the
-    // army is 1.5× the attack threshold (credits are kept for later). Defence always overrides this.
-    if (
+    // While the first attack is still held back, do not build a "deathball": stop adding land combat units once the
+    // army is 1.5× the attack threshold (credits are kept for later). Defence always overrides this. The fleet is a
+    // separate force, so the Naval Yard keeps working (v0.16).
+    const holding =
       this.state !== 'defend' &&
       w.tick < this.firstAttackTick() &&
-      this.armyValue(this.army()) >= this.attackThreshold() * (this.pers.aggression < 1 ? 1.25 : 1.5)
-    ) {
-      this.lastDecision = 'holding production until first attack';
-      return;
-    }
-    const producers = w
-      .playerBuildings(this.playerId)
-      .filter((b) => b.complete && b.def.produces)
-      .slice(0, this.diff.maxProducers);
+      this.armyValue(this.army()) >= this.attackThreshold() * (this.pers.aggression < 1 ? 1.25 : 1.5);
+    if (holding) this.lastDecision = 'holding production until first attack';
+    const all = w.playerBuildings(this.playerId).filter((b) => b.complete && b.def.produces);
+    const yards = all.filter((b) => b.type === 'naval-yard');
+    // Keep room under the unit limit for a small fleet: land production pauses near the cap until 3 warships exist.
+    const fleetSize = w.playerUnits(this.playerId).filter((u) => u.naval && u.def.weapon).length;
+    const saveSupply = yards.length > 0 && fleetSize < 3 && w.unitCap > 0 && w.supplyUsed(this.playerId) > w.unitCap - 12;
+    // The Naval Yard comes on top of the producer limit (it only builds ships). Until 3 warships exist it is served
+    // first, otherwise cheap land units always spend the credits before a ship can be afforded.
+    const land = holding || saveSupply ? [] : all.filter((b) => b.type !== 'naval-yard').slice(0, this.diff.maxProducers);
+    const producers = fleetSize < 3 ? [...yards, ...land] : [...land, ...yards];
     for (const b of producers) {
       if (b.queue.length >= 2) continue;
       const options = (Object.keys(UNITS) as UnitTypeId[]).filter(
@@ -539,12 +589,14 @@ export class AICommander {
         this.lastDecision = 'at unit limit';
         continue;
       }
-      if (this.player.credits - w.unitCost(this.playerId, best) < this.reserve()) continue;
+      // Until the first two warships exist, land units only spend what is left above the price of a ship.
+      const saveForShip = b.type !== 'naval-yard' && yards.length > 0 && fleetSize < 2 ? UNITS['patrol-boat'].cost : 0;
+      if (this.player.credits - w.unitCost(this.playerId, best) < this.reserve() + saveForShip) continue;
       const res = w.issue({ type: 'produce', player: this.playerId, producer: b.id, unit: best });
       if (res.ok) this.lastDecision = `produce ${best}`;
       // Gather produced units in front of the base.
       const hq = this.hq();
-      if (hq) {
+      if (hq && b.type !== 'naval-yard') {
         const gx = hq.x + Math.sign(w.map.width / 2 - hq.x) * 6;
         const gy = hq.y + Math.sign(w.map.height / 2 - hq.y) * 6;
         if (Math.hypot(b.rallyX - gx, b.rallyY - gy) > 0.5)
@@ -588,8 +640,13 @@ export class AICommander {
     this.captureIds = this.captureIds.filter((id) => w.get(id));
     for (const id of this.captureIds) inSquad.add(id);
     for (const id of this.flagRaid) inSquad.add(id);
+    this.hillIds = this.hillIds.filter((id) => w.get(id));
+    for (const id of this.hillIds) inSquad.add(id);
+    // v0.15: warships fight as their own fleet (manageFleet), not with the land army.
+    const fleet = army.filter((u) => u.naval);
+    for (const u of fleet) inSquad.add(u.id);
     // Units walking into a bunker / transport are spoken for.
-    const home = army.filter((u) => !inSquad.has(u.id) && u.order.type !== 'board');
+    let home = army.filter((u) => !inSquad.has(u.id) && u.order.type !== 'board');
 
     // 1. Defend: visible enemies close to any of our buildings.
     const blds = w.playerBuildings(this.playerId);
@@ -634,11 +691,20 @@ export class AICommander {
     // 2b. Take strategic points (income + vision).
     this.manageCapture(home);
 
+    // 2b'. Hold the nearest hill with long-range units (vision + range bonus).
+    this.manageHill(home);
+
     // 2c. Capture the Flag: raid the enemy flag, bring it home, chase whoever took ours.
     if (w.flags.length) this.manageFlags(home);
 
     // 2d. Transport-helicopter drop raid on the enemy economy.
     this.manageDrop(home);
+
+    // 2e. Amphibious raid with the Landing Craft (v0.14).
+    this.manageLanding(home);
+
+    // 2f. The fleet hunts enemy ships, guards our coast and shells coastal targets (v0.15).
+    this.manageFleet(fleet);
 
     // 3. Maintain attack squads.
     this.squads = this.squads.filter((sq) => {
@@ -708,6 +774,9 @@ export class AICommander {
     });
     if (!this.squads.length && this.state === 'attack') this.state = 'buildup';
 
+    // Units sent to a transport above (drop / landing raids) are spoken for.
+    home = home.filter((u) => u.order.type !== 'board');
+
     // 4. Launch a new attack when strong enough and the enemy is known — or join an ally's attack.
     const threshold = this.attackThreshold();
     const firstAttack = this.firstAttackTick();
@@ -756,7 +825,7 @@ export class AICommander {
       };
       // Infantry ride in the squad's APCs: they arrive together and protected.
       const waiting = new Set<number>();
-      for (const apc of g.filter((u) => u.def.transport && !u.air)) {
+      for (const apc of g.filter((u) => u.def.transport && !u.air && !u.naval)) {
         const free = apc.def.transport!.capacity - apc.passengers.length;
         const riders = g
           .filter((u) => u.def.category === 'infantry' && !waiting.has(u.id))
@@ -896,6 +965,210 @@ export class AICommander {
     }
   }
 
+  /**
+   * v0.15 fleet: (1) attack the nearest visible enemy ship; (2) defend our coast when enemies near our buildings can
+   * be reached from the water; (3) with ≥ 3 warships after the first-attack time, shell the remembered enemy
+   * building closest to the water; (4) otherwise wait in the home bay.
+   */
+  private manageFleet(fleet: Unit[]): void {
+    const w = this.world;
+    if (!fleet.length) {
+      this.fleetGoal = null;
+      return;
+    }
+    const team = this.player.team;
+    const cx = fleet.reduce((s, u) => s + u.x, 0) / fleet.length;
+    const cy = fleet.reduce((s, u) => s + u.y, 0) / fleet.length;
+    const visible = w.visibleEnemies(team);
+    let goal: { x: number; y: number } | null = null;
+    let why = '';
+    // 1. Enemy ships in sight.
+    const ships = visible
+      .filter((e): e is Unit => e.kind === 'unit' && e.naval)
+      .sort((a, b) => Math.hypot(a.x - cx, a.y - cy) - Math.hypot(b.x - cx, b.y - cy));
+    if (ships.length) {
+      goal = { x: ships[0].x, y: ships[0].y };
+      why = 'fleet engages ships';
+    }
+    // 2. Coastal defence: enemies near our buildings that a ship can get close to.
+    if (!goal) {
+      const blds = w.playerBuildings(this.playerId);
+      const threat = visible.find(
+        (e) =>
+          blds.some((b) => Math.hypot(b.x - e.x, b.y - e.y) < 12) && this.beachNear(e.x, e.y, 0, 8) !== null,
+      );
+      if (threat) {
+        goal = this.beachNear(threat.x, threat.y, 0, 8);
+        why = 'fleet guards the coast';
+      }
+    }
+    // 3. Shore bombardment.
+    if (!goal && fleet.length >= 3 && w.tick >= this.firstAttackTick() && this.state !== 'defend') {
+      let best: { x: number; y: number } | null = null;
+      let bd = Infinity;
+      for (const k of this.known.values()) {
+        // Destroyer guns reach 13 tiles: any water within 12 of the building will do.
+        const b = this.beachNear(k.x, k.y, 0, 12);
+        if (!b) continue;
+        const d = Math.hypot(b.x - k.x, b.y - k.y);
+        if (d < bd) {
+          bd = d;
+          best = b;
+        }
+      }
+      if (best) {
+        goal = best;
+        why = 'fleet shells the coast';
+      }
+    }
+    // 4. Home bay.
+    if (!goal) {
+      const yard = w.playerBuildings(this.playerId).find((b) => b.type === 'naval-yard');
+      const home = yard ?? this.hq();
+      const bay = home ? w.water.nearestWalkable(Math.floor(home.x), Math.floor(home.y), 10) : null;
+      if (bay && Math.hypot(cx - bay.x, cy - bay.y) > 6) {
+        goal = { x: bay.x + 0.5, y: bay.y + 0.5 };
+        why = 'fleet returns to the home bay';
+      }
+    }
+    if (!goal) return;
+    const idle = fleet.filter((u) => u.order.type === 'idle' && u.targetId === null);
+    const moved = !this.fleetGoal || Math.hypot(this.fleetGoal.x - goal.x, this.fleetGoal.y - goal.y) > 3;
+    if (!moved && !idle.length) return;
+    this.fleetGoal = goal;
+    w.issue({
+      type: 'move',
+      player: this.playerId,
+      units: (moved ? fleet : idle).map((u) => u.id),
+      x: goal.x,
+      y: goal.y,
+      attackMove: true,
+    });
+    this.lastDecision = why;
+  }
+
+  /** Water tiles (centres) next to a walkable land tile — where a Landing Craft can put troops ashore. */
+  private beachTiles(): { x: number; y: number }[] {
+    if (this.beaches) return this.beaches;
+    const g = this.world.grid;
+    const out: { x: number; y: number }[] = [];
+    for (let y = 0; y < g.height; y++)
+      for (let x = 0; x < g.width; x++) {
+        if (g.tile(x, y) !== 'water') continue;
+        if (g.terrainWalkable(x + 1, y) || g.terrainWalkable(x - 1, y) || g.terrainWalkable(x, y + 1) || g.terrainWalkable(x, y - 1))
+          out.push({ x: x + 0.5, y: y + 0.5 });
+      }
+    return (this.beaches = out);
+  }
+
+  /** Beach closest to (x, y) but at least `minD` tiles away (landing out of reach of the target's guns). */
+  private beachNear(x: number, y: number, minD: number, maxD: number): { x: number; y: number } | null {
+    let best: { x: number; y: number } | null = null;
+    let bd = Infinity;
+    for (const b of this.beachTiles()) {
+      const d = Math.hypot(b.x - x, b.y - y);
+      if (d < minD || d > maxD || d >= bd) continue;
+      bd = d;
+      best = b;
+    }
+    return best;
+  }
+
+  /**
+   * v0.14 amphibious raid: the Landing Craft waits on the home beach, takes up to 6 seats of home ground units
+   * (nearest first: a tank + infantry fills it), sails to a beach 5–12 tiles from a remembered enemy building
+   * (economy first) and puts the troops ashore as a new attack squad, then returns home.
+   */
+  private manageLanding(home: Unit[]): void {
+    const w = this.world;
+    const craft = w.playerUnits(this.playerId).find((u) => u.type === 'landing-craft');
+    const hq = this.hq();
+    if (!craft || !hq) {
+      this.landing = null;
+      return;
+    }
+    if (!this.landing || this.landing.craft !== craft.id) {
+      const homeBeach = this.beachNear(hq.x, hq.y, 0, 20);
+      if (!homeBeach) return;
+      this.landing = { craft: craft.id, phase: 'gather', tick: w.tick, home: homeBeach, target: null, beach: null };
+    }
+    const L = this.landing;
+    const boarding = this.boardingInto(craft.id);
+    if (L.phase === 'gather') {
+      if (craft.passengers.length) {
+        L.phase = 'load';
+        return;
+      }
+      if (Math.hypot(craft.x - L.home.x, craft.y - L.home.y) > 2) {
+        if (!craft.moving)
+          w.issue({ type: 'move', player: this.playerId, units: [craft.id], x: L.home.x, y: L.home.y, attackMove: false });
+        return;
+      }
+      if (this.state === 'defend' || w.tick < this.firstAttackTick() || this.known.size === 0 || boarding.length) return;
+      // Pick the landing first: no beach near any known enemy building means no raid.
+      const known = [...this.known.values()];
+      const eco = known.filter((k) => k.type === 'resource-extractor' || k.type === 'power-plant');
+      let target: { x: number; y: number } | null = null;
+      let beach: { x: number; y: number } | null = null;
+      for (const k of [...eco, ...known]) {
+        const b = this.beachNear(k.x, k.y, 5, 12);
+        if (b) {
+          target = { x: k.x, y: k.y };
+          beach = b;
+          break;
+        }
+      }
+      if (!target || !beach) return;
+      const ground = home.filter((u) => !u.air && !u.naval && w.canCarry(craft, u));
+      if (ground.length < 8) return;
+      const riders = ground.sort(
+        (a, b) => Math.hypot(a.x - craft.x, a.y - craft.y) - Math.hypot(b.x - craft.x, b.y - craft.y),
+      );
+      if (w.issue({ type: 'load', player: this.playerId, units: riders.map((u) => u.id), carrier: craft.id }).ok) {
+        L.phase = 'load';
+        L.tick = w.tick;
+        L.target = target;
+        L.beach = beach;
+        this.lastDecision = 'loading landing craft';
+      }
+      return;
+    }
+    if (L.phase === 'load') {
+      const full = w.seatsUsed(craft) >= w.capacityOf(craft);
+      if (boarding.length && !full && w.tick - L.tick < 400) return;
+      if (boarding.length) w.issue({ type: 'stop', player: this.playerId, units: boarding.map((u) => u.id) });
+      if (!craft.passengers.length || !L.beach) {
+        L.phase = 'gather';
+        return;
+      }
+      L.phase = 'sail';
+      L.tick = w.tick;
+      w.issue({ type: 'move', player: this.playerId, units: [craft.id], x: L.beach.x, y: L.beach.y, attackMove: false });
+      this.lastDecision = 'amphibious raid';
+      return;
+    }
+    // Sailing: land on arrival (or when badly hurt, wherever there is a beach).
+    const arrived = !!L.beach && (Math.hypot(craft.x - L.beach.x, craft.y - L.beach.y) < 1.5 || !craft.moving);
+    const hurt = craft.hp < craft.maxHp * 0.4;
+    if (!arrived && !hurt) return;
+    const ids = craft.passengers.map((p) => p.id);
+    if (w.issue({ type: 'unload', player: this.playerId, carrier: craft.id }).ok) {
+      const troops = ids.map((id) => w.get(id)).filter((u): u is Unit => !!u && u.kind === 'unit');
+      this.squads.push({ ids: new Set(ids), startHp: troops.reduce((s, u) => s + u.hp, 0), target: null });
+      if (L.target)
+        w.issue({ type: 'move', player: this.playerId, units: ids, x: L.target.x, y: L.target.y, attackMove: true });
+      this.lastDecision = `amphibious landing (${ids.length})`;
+    } else if (craft.moving) {
+      return;
+    }
+    if (!craft.passengers.length || w.tick - L.tick > 20 * 90) {
+      L.phase = 'gather';
+      L.target = null;
+      L.beach = null;
+      w.issue({ type: 'move', player: this.playerId, units: [craft.id], x: L.home.x, y: L.home.y, attackMove: false });
+    }
+  }
+
   /** Flag positions are public (like strategic points); carriers are tracked through the flag state. */
   private manageFlags(home: Unit[]): void {
     const w = this.world;
@@ -913,7 +1186,7 @@ export class AICommander {
     }
     // Our flag is away from home → home units go after it.
     if (own && !own.atHome) {
-      const hunters = home.filter((u) => !u.air && u.order.type !== 'attack').slice(0, 6);
+      const hunters = home.filter((u) => !u.air && !u.naval && u.order.type !== 'attack').slice(0, 6);
       if (hunters.length)
         w.issue({
           type: 'move',
@@ -935,7 +1208,7 @@ export class AICommander {
     if (!target) return;
     if (this.flagRaid.length < 2) {
       const ground = home
-        .filter((u) => !u.air && !this.flagRaid.includes(u.id))
+        .filter((u) => !u.air && !u.naval && !this.flagRaid.includes(u.id))
         .sort((a, b) => b.speed - a.speed);
       if (ground.length >= 4)
         this.flagRaid.push(...ground.slice(0, 4 - this.flagRaid.length).map((u) => u.id));
@@ -985,7 +1258,7 @@ export class AICommander {
     );
     const hq = this.hq();
     if (owned >= limit || !hq) return;
-    const ground = home.filter((u) => !u.air);
+    const ground = home.filter((u) => !u.air && !u.naval);
     if (ground.length < (w.survival ? 4 : 6) || (!w.survival && this.armyValue(home) < this.minArmy()))
       return;
     const target = w.points
@@ -1006,6 +1279,135 @@ export class AICommander {
       attackMove: true,
     });
     this.lastDecision = `capture ${target.name}`;
+  }
+
+  /**
+   * v0.13: true (from Normal up) when a shore site exists near our HQ and its water body is open sea
+   * (≥ 300 tiles) that also comes within 16 tiles of an enemy spawn. Decided once per match.
+   */
+  private navalMap(): boolean {
+    if (this.naval !== null) return this.naval;
+    const w = this.world;
+    const hq = this.hq();
+    if (this.player.difficulty === 'easy' || !hq || !this.world.hasCompleted(this.playerId, 'war-factory'))
+      return false;
+    this.naval = false;
+    const site = findShoreSite(w, this.playerId, hq);
+    if (!site) return false;
+    const start = w.water.nearestWalkable(site.tx + 1, site.ty + 1, 4);
+    if (!start) return false;
+    const W = w.map.width;
+    const seen = new Uint8Array(W * w.map.height);
+    const stack = [start.y * W + start.x];
+    seen[stack[0]] = 1;
+    let size = 0;
+    const enemies = w.map.spawns.filter((_, i) =>
+      w.players.some((p) => p.spawnIndex === i && w.areEnemies(p.team, this.player.team)),
+    );
+    let reachesEnemy = false;
+    while (stack.length) {
+      const c = stack.pop()!;
+      size++;
+      const x = c % W;
+      const y = (c / W) | 0;
+      if (!reachesEnemy && enemies.some((s) => Math.hypot(s.tx - x, s.ty - y) < 16)) reachesEnemy = true;
+      for (const [nx, ny] of [
+        [x + 1, y],
+        [x - 1, y],
+        [x, y + 1],
+        [x, y - 1],
+      ]) {
+        if (!w.water.walkable(nx, ny) || seen[ny * W + nx]) continue;
+        seen[ny * W + nx] = 1;
+        stack.push(ny * W + nx);
+      }
+    }
+    this.naval = size >= BALANCE.navalSeaMin && reachesEnemy;
+    return this.naval;
+  }
+
+  /**
+   * Hill clusters (4-connected hill tiles) as lists of tile centres, sorted from the cluster centre outward.
+   * Computed once per commander — hills are never destroyed.
+   */
+  private hillClusters(): { x: number; y: number }[][] {
+    const g = this.world.grid;
+    const seen = new Uint8Array(g.width * g.height);
+    const out: { x: number; y: number }[][] = [];
+    for (let y = 0; y < g.height; y++)
+      for (let x = 0; x < g.width; x++) {
+        if (seen[g.index(x, y)] || g.tile(x, y) !== 'hill') continue;
+        const tiles: { x: number; y: number }[] = [];
+        const stack = [[x, y]];
+        seen[g.index(x, y)] = 1;
+        while (stack.length) {
+          const [cx, cy] = stack.pop()!;
+          tiles.push({ x: cx + 0.5, y: cy + 0.5 });
+          for (const [dx, dy] of [
+            [1, 0],
+            [-1, 0],
+            [0, 1],
+            [0, -1],
+          ]) {
+            const nx = cx + dx;
+            const ny = cy + dy;
+            if (g.tile(nx, ny) !== 'hill' || seen[g.index(nx, ny)]) continue;
+            seen[g.index(nx, ny)] = 1;
+            stack.push([nx, ny]);
+          }
+        }
+        if (tiles.length < 3) continue;
+        const mx = tiles.reduce((s, t) => s + t.x, 0) / tiles.length;
+        const my = tiles.reduce((s, t) => s + t.y, 0) / tiles.length;
+        tiles.sort((a, b) => Math.hypot(a.x - mx, a.y - my) - Math.hypot(b.x - mx, b.y - my));
+        out.push(tiles);
+      }
+    return out;
+  }
+
+  /**
+   * v0.13 high ground: from Normal up, once the home army is big enough, park up to 3 long-range ground units
+   * (artillery first) on the nearest hill within reach of our base. They hold there as a fire base and walk
+   * back after chasing something off the hill.
+   */
+  private manageHill(home: Unit[]): void {
+    const w = this.world;
+    if (this.player.difficulty === 'easy') return;
+    const hq = this.hq();
+    if (!hq) return;
+    if (this.hillPost === null) {
+      const near = this.hillClusters()
+        .filter((c) => Math.hypot(c[0].x - hq.x, c[0].y - hq.y) < 36)
+        .sort((a, b) => Math.hypot(a[0].x - hq.x, a[0].y - hq.y) - Math.hypot(b[0].x - hq.x, b[0].y - hq.y));
+      this.hillPost = near[0] ?? [];
+    }
+    const post = this.hillPost;
+    if (!post.length) return;
+    const onPost = (u: Unit) => w.grid.tile(Math.floor(u.x), Math.floor(u.y)) === 'hill';
+    // Guards that wandered off (chasing a target) go back to their tile once idle.
+    this.hillIds.forEach((id, i) => {
+      const u = w.get(id) as Unit;
+      if (u.order.type === 'idle' && u.targetId === null && !onPost(u)) {
+        const t = post[i % post.length];
+        w.issue({ type: 'move', player: this.playerId, units: [id], x: t.x, y: t.y, attackMove: true });
+      }
+    });
+    if (this.state === 'defend' || this.state === 'opening' || this.hillIds.length >= 3) return;
+    const ground = home.filter((u) => !u.air && !u.naval && !u.def.transport && u.def.weapon);
+    if (ground.length < 6 || this.armyValue(home) < this.minArmy()) return;
+    const pick = ground
+      .sort(
+        (a, b) =>
+          Number(b.def.category === 'artillery') - Number(a.def.category === 'artillery') ||
+          b.def.weapon!.range - a.def.weapon!.range,
+      )
+      .slice(0, Math.min(3 - this.hillIds.length, ground.length - 5));
+    for (const u of pick) {
+      const t = post[this.hillIds.length % post.length];
+      this.hillIds.push(u.id);
+      w.issue({ type: 'move', player: this.playerId, units: [u.id], x: t.x, y: t.y, attackMove: true });
+    }
+    if (pick.length) this.lastDecision = `hold hill (${this.hillIds.length})`;
   }
 
   /** Research technologies in personality order and repair damaged buildings when safe. */

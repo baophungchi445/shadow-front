@@ -106,7 +106,7 @@ export function MainMenu() {
         </button>
         <div className="absolute bottom-5 left-[8%] text-[11px] text-gray-600">
           {t(
-            'v0.12 prototype · procedural placeholder graphics & audio · offline skirmish, survival & campaign vs AI',
+            'v0.15 prototype · procedural placeholder graphics & audio · offline skirmish, survival & campaign vs AI',
           )}
         </div>
       </div>

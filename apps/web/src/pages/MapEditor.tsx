@@ -5,6 +5,7 @@ import {
   TILE_KINDS,
   blankMap,
   customMapErrors,
+  navalInfo,
   decodeTiles,
   encodeTiles,
   toMapDef,
@@ -80,6 +81,8 @@ export function MapEditor() {
   const painting = useRef(false);
   const cell = Math.floor(CANVAS / Math.max(ed.width, ed.height));
   const errors = useMemo(() => customMapErrors(toMapDef(toStored(ed))), [ed]);
+  const naval = useMemo(() => navalInfo(toMapDef(toStored(ed))), [ed]);
+  const harbours = naval.harbours.flatMap((ok, i) => (ok ? [i + 1] : []));
 
   // ---------------------------------------------------------------- drawing
   useEffect(() => {
@@ -343,6 +346,15 @@ export function MapEditor() {
               ) : (
                 <div className="text-xs font-semibold text-mil-400">✔ {t('Map is playable')}</div>
               )}
+              <div className="mt-1 text-xs text-gray-400" data-testid="naval-info">
+                ⚓{' '}
+                {harbours.length
+                  ? t('Navy: open sea of {n} tiles; Naval Yard possible at spawn {list}', {
+                      n: naval.largestSea,
+                      list: harbours.join(', '),
+                    })
+                  : t('Navy: no harbour — needs a sea of 300+ water tiles touching open ground near a spawn')}
+              </div>
             </section>
             <section className="flex gap-2">
               <button className="btn" onClick={save} data-testid="save-map">

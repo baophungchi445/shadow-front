@@ -1,7 +1,8 @@
 import type Phaser from 'phaser';
-import { worldToScreen, type Building, type Unit } from '@shadow-front/game-core';
+import { worldToScreen, type Building, type Unit, type World } from '@shadow-front/game-core';
 import { AIR_ALTITUDE, drawBuilding, drawTurretHead, drawUnitBody, drawUnitTop, hasTop } from './shapes';
 import { cachedTexture, dirAngle, dirIndex } from './texcache';
+import { groundElevation } from './terrain';
 
 /** Unit texture frame: ground point at (UX, UY) inside a UW×UH texture (room for aircraft altitude). */
 const UW = 128;
@@ -29,6 +30,7 @@ export class UnitView {
     private readonly scene: Phaser.Scene,
     readonly unit: Unit,
     readonly color: number,
+    private readonly map: World['map'],
   ) {
     this.look = unit.def.look ?? unit.type;
     this.altitude = AIR_ALTITUDE[this.look] ?? 0;
@@ -59,12 +61,16 @@ export class UnitView {
     const x = u.prevX + (u.x - u.prevX) * alpha;
     const y = u.prevY + (u.y - u.prevY) * alpha;
     const p = worldToScreen(x, y);
+    // Ground units ride on the raised hill plateau (v0.13).
+    if (!u.air) p.y -= groundElevation(this.map, x, y);
     this.sx = p.x;
     this.sy = p.y;
     this.visible = visible;
     this.body.setVisible(visible);
     this.top?.setVisible(visible);
     if (!visible) return;
+    // Submarines are drawn see-through: they sail submerged (v0.15).
+    if (u.def.submarine) this.body.setAlpha(0.6);
 
     const depth = p.y + (u.air ? 10000 : 0);
     // Infantry: one sprite facing where it aims (or walks), with a walking bob.
@@ -129,8 +135,10 @@ export class BuildingView {
     private readonly scene: Phaser.Scene,
     readonly building: Building,
     readonly color: number,
+    map: World['map'],
   ) {
     const p = worldToScreen(building.x, building.y);
+    p.y -= groundElevation(map, building.x, building.y);
     this.sx = p.x;
     this.sy = p.y;
     const { w, h, height } = building.def;
@@ -146,7 +154,6 @@ export class BuildingView {
     this.body = scene.add
       .image(p.x, p.y, this.bodyKey(building.complete ? 'c0' : 'p0'))
       .setOrigin(this.ox / this.fw, this.oy / this.fh)
-      .setFlipX(building.facing % 2 === 1)
       .setDepth(p.y);
     this.head = building.def.weapon
       ? scene.add
@@ -163,12 +170,12 @@ export class BuildingView {
     const frame = state[0] === 'c' ? Number(state.slice(1)) : 0;
     return cachedTexture(
       this.scene,
-      `bb:${b.type}:${this.color}:${state}`,
+      `bb:${b.type}:${this.color}:${b.facing}:${state}`,
       this.fw,
       this.fh,
       this.ox,
       this.oy,
-      (g) => drawBuilding(g, b.type, this.color, step >= 0 ? step / 10 : 1, frame / ANIM_FRAMES),
+      (g) => drawBuilding(g, b.type, this.color, step >= 0 ? step / 10 : 1, frame / ANIM_FRAMES, b.facing),
     );
   }
 

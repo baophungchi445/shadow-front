@@ -219,6 +219,43 @@ Owner toggles repair on a completed, damaged building. A full 0→100% repair ta
   default rally point is in front. The client rotates the placement with the Retreat key; the AI faces producers toward the map centre.
 - **Avatar** (`Profile.avatar`): one of 8 glyphs (`AVATAR_ICONS`) on one of 8 colours (`AVATAR_COLORS`).
 
+## 5p. v0.13 additions
+
+- **Navy**: `UnitCategory 'naval'` (`Unit.naval`). Ships move on `World.water` (`WaterNav`: water tiles only, nearest-water search up to
+  64 tiles) through `World.navFor(u)`; `findPath` takes any `Nav`. A move order on land sends ships to the closest reachable water.
+  Ships are ground targets (not air), count as vehicles for armor / turbo research and the faction `armored` damage modifier, and are
+  ignored by strategic points, flags and building eviction.
+  - **Naval Yard** (1500, 3×3, −40 power, needs War Factory): `BuildingDef.needsWater` — at least `BALANCE.shoreWaterTiles` (2) water
+    tiles along its edges (`World.shoreWater`). The client always faces it toward the water (`World.shoreFacing`); ships launch on the
+    nearest water tile in front (radius 3, then 5 around the yard).
+  - **Patrol Boat** (700, 380 HP, light, speed 0.12, MG 16 dmg / range 6, hits ground and air). **Destroyer** (1800, needs Research
+    Center, 1400 HP, heavy, speed 0.06, artillery 130 dmg / range 13 / min 3, splash 1.3). Supply 2 / 4.
+  - Map **Coastal Front** (`coastal-front`): point-symmetric, central sea (r ≈ 13) with a 4-tile bay toward each base, home ore away
+    from the bays, two hills on the capes, four strategic points on land.
+- **Rendering**: hill plateaus are drawn `HILL_PX` (8 px) above the plain; `groundElevation` blends units across the half tile at the
+  edge. Buildings are drawn per facing (front details on the front face for facings 0 / 1, rear details for 2 / 3) instead of flipping.
+
+## 5q. v0.14 additions
+
+- **Seats** (`World.seatsOf / seatsUsed / canCarry / fits`): transport capacity is counted in seats; infantry take 1, ground vehicles
+  (armored / artillery) `BALANCE.vehicleSeats` (3). Only a carrier with `transport.vehicles` (Landing Craft) takes vehicles; aircraft and
+  ships never board. `load` hands out seats in selection order and skips units that no longer fit.
+- **Landing Craft** (600, 500 HP, light, speed 0.1, unarmed, 6 seats, supply 2): boarding reach 2.6 tiles for naval carriers (troops
+  board from the nearest shore tile). `unload` needs open ground within `BALANCE.beachReach` (2.5) tiles; passengers die with the craft.
+- Map **Strait Crossing** (`strait-crossing`): strait across rows ≈ 27–36 from x 9 to 54, beaches, a 3-tile bay toward every base, land
+  routes only over the two isthmuses (hills, rich ore, strategic points), point-symmetric.
+
+## 5r. v0.15 additions
+
+- **Submarine** (1300, Research Center, 450 HP, light, speed 0.075; torpedo `rocket` 110 dmg, range 6, cooldown 80, `navalOnly`,
+  `antiSub: 1`; supply 3). `UnitDef.submarine`: `World.isVisibleTo` hides it from a team unless `World.subDetected` — a unit of that
+  team with an `antiSub` weapon within `BALANCE.sonarRange` (7), any entity within `subSpotRange` (2), or it fired within
+  `subRevealTicks` (40).
+- **Targeting** (`canTarget`): submarines only by weapons with `antiSub` (damage × `antiSub`: Patrol Boat 6); `navalOnly` weapons only
+  hit naval units. Splash uses the same filter, so artillery never hurts submarines.
+- `BALANCE.navalSeaMin` (300): open-sea threshold shared by the AI and `navalInfo` (map editor harbour check: 3×3 open ground within 14
+  tiles of a spawn with ≥ 2 sea tiles along its edges).
+
 ## 6. Fog of War
 
 - Per team: `explored` (ever seen) and `visible` (seen now) bitsets, recomputed at 4 Hz from vision radius of units and buildings.

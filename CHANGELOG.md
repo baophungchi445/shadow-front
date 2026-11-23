@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.15.0 — 2026-11-20 (offline: submarines, AI fleets, harbour check)
+
+- **Submarine** (Naval Yard, needs Research Center): always submerged — enemies only see it with sonar (Patrol Boat) within 7 tiles,
+  anything within 2 tiles, or for 2 s after it fires. Torpedoes hit ships only. Only Patrol Boats (depth charges ×6) and other
+  submarines can hurt it. Naval counters: submarine > destroyer > patrol boat > submarine.
+- **AI fleets** act on their own: engage visible enemy ships, guard the coast, shell coastal buildings with 3+ warships, otherwise hold
+  the home bay. The AI keeps a patrol boat for sonar and builds submarines once it has seen enemy warships.
+- **Map editor**: harbour check (⚓) — size of the largest sea and which spawns can build a Naval Yard (same 300-tile rule as the AI).
+
+## 0.14.0 — 2026-11-20 (offline: amphibious warfare, Strait Crossing)
+
+- **Landing Craft** (Naval Yard): unarmed transport with 6 seats — infantry take 1, ground vehicles 3 (a tank + 3 riflemen fills it).
+  Troops board from the nearest beach (right-click the craft); unload with U only next to a beach.
+- **AI amphibious raids**: from Normal, an AI with a fleet builds one Landing Craft, loads home troops and lands them 5–12 tiles from a
+  known enemy building, then sails back for more.
+- New map **Strait Crossing**: a strait splits north from south; armies cross only at the two isthmuses, ships rule the middle.
+- Fixes: troops just ordered into a transport are no longer pulled into the AI's main attack in the same decision; missing Vietnamese
+  messages for full / empty transports.
+
+## 0.13.0 — 2026-11-20 (offline: navy, high-ground AI, raised hills, building backs)
+
+- **Navy**: new map **Coastal Front** (an inland sea with a bay at every base). Build a **Naval Yard** on the shore (it faces the water
+  by itself) to launch **Patrol Boats** (fast machine-gun boats, also shoot aircraft) and **Destroyers** (armored, deck gun shells the
+  coast from 13 tiles). Ships sail on water only and stop at the coast when sent inland; they cannot take points or flags.
+- **AI**: from Normal up the AI holds the nearest hill with up to 3 long-range units (artillery first); on sea maps it builds a Naval
+  Yard and keeps a fleet of up to 5 ships.
+- Hills are drawn **raised** above the plain with cliff faces; units and buildings on them stand on the plateau and glide up / down
+  its edges.
+- Buildings now have distinct **front and back** sides (garage door / entrance in front, hatches, vents and ducts at the back) instead of
+  a mirrored sprite; the Airfield paints a taxi line toward its front.
+
 ## 0.12.0 — 2026-11-20 (offline: terrain, building facing, avatars)
 
 - **High ground**: hills give +2 vision and +1 range; direct fire from below misses a target on a hill 25% of the time. On Desert Storm,

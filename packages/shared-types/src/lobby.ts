@@ -94,6 +94,8 @@ export interface MatchConfig {
   unitCap?: number;
   /** Seed for `mapId: 'random'` (defaults to `seed`). */
   mapSeed?: number;
+  /** v0.16: random map with an inland sea. */
+  mapSea?: boolean;
   /** Campaign mission id when this match is a campaign mission (offline). */
   campaignMission?: string;
   /** Required when `mapId: 'custom'`: a player-made map (validated by the World). */

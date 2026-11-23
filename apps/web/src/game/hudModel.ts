@@ -79,7 +79,7 @@ export type SelectionInfo =
         order: string;
         rank: number;
         /** Transports: passengers inside / capacity (null when it cannot carry). */
-        cargo: { count: number; capacity: number } | null;
+        cargo: { count: number; capacity: number; vehicles?: boolean } | null;
         /** Own Mobile Command Vehicle: name of the building it deploys into. */
         deploysTo: string | null;
         /** Own grenadier: seconds until the smoke grenade is ready (0 = ready), null = none. */
@@ -109,7 +109,7 @@ export type SelectionInfo =
       /** Credits returned if sold now (null when it cannot be sold). */
       sellValue: number | null;
       /** Bunkers: garrison / capacity. */
-      cargo: { count: number; capacity: number } | null;
+      cargo: { count: number; capacity: number; vehicles?: boolean } | null;
       level: number;
       /** Level-2 upgrade: cost and progress (null = not upgrading); null when not upgradable / done. */
       upgrade: { cost: number; progress: number | null; affordable: boolean } | null;
@@ -364,7 +364,11 @@ export function snapshotHud(c: GameController): HudSnapshot {
               order: w.isSuppressed(one) ? 'Suppressed' : orderLabel(one.order),
               rank: one.rank,
               cargo: one.def.transport
-                ? { count: one.passengers.length, capacity: one.def.transport.capacity }
+                ? {
+                    count: w.seatsUsed(one),
+                    capacity: one.def.transport.capacity,
+                    vehicles: !!one.def.transport.vehicles,
+                  }
                 : null,
               deploysTo: one.def.deploysTo && one.owner === pid ? BUILDINGS[one.def.deploysTo].name : null,
               smokeIn:

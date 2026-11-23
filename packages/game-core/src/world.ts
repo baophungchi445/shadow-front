@@ -32,7 +32,7 @@ import {
   getMap,
   mulberry32,
 } from '@shadow-front/game-data';
-import { NavGrid } from './grid';
+import { NavGrid, type Nav, type WaterNav } from './grid';
 import { FogOfWar } from './fog';
 import { SpatialHash } from './spatial';
 import type {
@@ -61,6 +61,8 @@ import { updateFlags } from './systems/flags';
 export class World {
   readonly map: MapDef;
   readonly grid: NavGrid;
+  /** Water-only navigation for ships (v0.13). */
+  readonly water: WaterNav;
   readonly fog: FogOfWar;
   readonly spatial: SpatialHash;
   readonly mission: MissionType;
@@ -105,7 +107,10 @@ export class World {
       if (errors.length) throw new Error(`Custom map is not playable: ${errors[0]}`);
       map = config.customMap;
     } else {
-      map = getMap(config.mapId, config.mapId === 'random' ? (config.mapSeed ?? config.seed) : undefined);
+      map =
+        config.mapId === 'random'
+          ? getMap('random', config.mapSeed ?? config.seed, !!config.mapSea)
+          : getMap(config.mapId);
     }
     // Own copy of the tiles: destructible terrain changes them during the match (maps are cached / shared).
     this.map = { ...map, tiles: map.tiles.slice() };
@@ -121,6 +126,7 @@ export class World {
     this.seed = config.seed;
     this.rng = mulberry32(config.seed);
     this.grid = new NavGrid(this.map);
+    this.water = this.grid.water();
     this.spatial = new SpatialHash(4, Math.ceil(this.map.width / 4));
     this.oreRemaining = new Float32Array(this.map.width * this.map.height);
     this.map.tiles.forEach((t, i) => {
@@ -158,7 +164,7 @@ export class World {
         powerProduced: 0,
         powerUsed: 0,
         defeated: false,
-        spawnIndex: i,
+        spawnIndex: (globalThis as { __swap?: boolean }).__swap ? config.slots.length - 1 - i : i,
         stats: {
           unitsBuilt: 0,
           unitsLost: 0,
@@ -303,7 +309,7 @@ export class World {
     const def = UNITS[type];
     const p = this.players[owner];
     const mods = FACTIONS[p.faction].modifiers;
-    const vehicle = def.category === 'armored' || def.category === 'artillery';
+    const vehicle = def.category === 'armored' || def.category === 'artillery' || def.category === 'naval';
     const armor = vehicle && this.hasResearch(owner, 'composite-armor') ? RESEARCH_EFFECTS.vehicleHp : 1;
     const optics = this.hasResearch(owner, 'advanced-optics') ? RESEARCH_EFFECTS.vision : 1;
     const medkits =
@@ -327,7 +333,7 @@ export class World {
       hp,
       maxHp: hp,
       dead: false,
-      damageMul: (mods.damage[def.category] ?? 1) * (drilled ? UNIT_UPGRADE.damage : 1),
+      damageMul: (mods.damage[def.category === 'naval' ? 'armored' : def.category] ?? 1) * (drilled ? UNIT_UPGRADE.damage : 1),
       cooldown: 0,
       targetId: null,
       turretFacing: Math.PI / 4,
@@ -335,6 +341,7 @@ export class World {
       vision: def.vision * mods.vision * optics,
       lastFiredTick: -100,
       air: def.category === 'air',
+      naval: def.category === 'naval',
       speed: def.speed * mods.speed * (vehicle ? mods.vehicleSpeed : 1) * turbo,
       radius: def.radius,
       order: { type: 'idle' },
@@ -423,7 +430,7 @@ export class World {
   /** Pushes ground units out of a newly placed footprint. */
   private evictUnitsFrom(b: Building): void {
     for (const e of this.entities.values()) {
-      if (e.kind !== 'unit' || e.air || e.dead) continue;
+      if (e.kind !== 'unit' || e.air || e.naval || e.dead) continue;
       if (e.x >= b.tx && e.x < b.tx + b.w && e.y >= b.ty && e.y < b.ty + b.h) {
         const t = this.grid.nearestWalkable(Math.floor(e.x), Math.floor(e.y));
         if (t) {
@@ -583,6 +590,7 @@ export class World {
 
   isVisibleTo(team: TeamId, e: Entity): boolean {
     if (e.team === team) return true;
+    if (e.kind === 'unit' && e.def.submarine && !this.subDetected(team, e)) return false;
     if (e.kind === 'unit' && !e.air && this.smokes.length && this.inSmoke(e.x, e.y)) {
       // Hidden in smoke: only enemies right next to it can see it.
       let spotted = false;
@@ -599,6 +607,19 @@ export class World {
       return false;
     }
     return this.fog.isVisible(team, e.x, e.y);
+  }
+
+  /** v0.15: whether `team` currently detects the submarine `sub` (sonar, close range or a torpedo just fired). */
+  subDetected(team: TeamId, sub: Unit): boolean {
+    if (this.tick - sub.lastFiredTick < BALANCE.subRevealTicks) return true;
+    let found = false;
+    this.spatial.query(sub.x, sub.y, BALANCE.sonarRange + 1, (o) => {
+      if (found || o.dead || o.team !== team) return;
+      const d = Math.hypot(o.x - sub.x, o.y - sub.y);
+      const sonar = o.kind === 'unit' && !!o.def.weapon?.antiSub;
+      found = d <= (sonar ? BALANCE.sonarRange : BALANCE.subSpotRange);
+    });
+    return found;
   }
 
   /** Enemy entities currently visible to the given team (respects Fog of War). */
@@ -649,7 +670,37 @@ export class World {
       const ore = this.oreTilesNear(cx, cy).reduce((s, i) => s + this.oreRemaining[i], 0);
       if (ore <= 0) return 'Must be placed next to an ore field';
     }
+    if (def.needsWater && this.shoreWater(tx, ty, def.w, def.h) < BALANCE.shoreWaterTiles)
+      return 'Must be built on the shore';
     return null;
+  }
+
+  /** Facing (see `Building.facing`) whose edge borders the most water — shipyards launch ships that way. */
+  shoreFacing(tx: number, ty: number, w: number, h: number): number {
+    const count = (xs: number[], ys: number[]) =>
+      xs.reduce((s, x) => s + ys.filter((y) => this.grid.tile(x, y) === 'water').length, 0);
+    const range = (a: number, n: number) => Array.from({ length: n }, (_, i) => a + i);
+    const edges = [
+      count(range(tx, w), [ty + h]),
+      count([tx + w], range(ty, h)),
+      count(range(tx, w), [ty - 1]),
+      count([tx - 1], range(ty, h)),
+    ];
+    return edges.indexOf(Math.max(...edges));
+  }
+
+  /** Water tiles directly beside a footprint's edges (v0.13 shipyard placement). */
+  shoreWater(tx: number, ty: number, w: number, h: number): number {
+    let n = 0;
+    for (let i = tx; i < tx + w; i++) {
+      if (this.grid.tile(i, ty - 1) === 'water') n++;
+      if (this.grid.tile(i, ty + h) === 'water') n++;
+    }
+    for (let j = ty; j < ty + h; j++) {
+      if (this.grid.tile(tx - 1, j) === 'water') n++;
+      if (this.grid.tile(tx + w, j) === 'water') n++;
+    }
+    return n;
   }
 
   // ---------------------------------------------------------------- commands & events
@@ -765,9 +816,38 @@ export class World {
     return e.complete ? (e.def.garrison?.capacity ?? 0) : 0;
   }
 
+  /** Seats a passenger takes: infantry 1, ground vehicles `BALANCE.vehicleSeats` (v0.14). */
+  seatsOf(u: Unit): number {
+    return u.def.category === 'infantry' ? 1 : BALANCE.vehicleSeats;
+  }
+
+  /** Seats already taken inside a carrier. */
+  seatsUsed(carrier: Entity): number {
+    return carrier.passengers.reduce((s, p) => s + this.seatsOf(p), 0);
+  }
+
+  /** Whether `u` may ride in `carrier` at all (ignoring free seats): infantry anywhere, ground vehicles in a
+   *  Landing Craft only. */
+  canCarry(carrier: Entity, u: Unit): boolean {
+    if (u.id === carrier.id || !this.capacityOf(carrier)) return false;
+    if (u.def.category === 'infantry') return true;
+    return (
+      carrier.kind === 'unit' &&
+      !!carrier.def.transport?.vehicles &&
+      !u.air &&
+      !u.naval &&
+      (u.def.category === 'armored' || u.def.category === 'artillery')
+    );
+  }
+
+  /** True when `u` still fits into `carrier`. */
+  fits(carrier: Entity, u: Unit): boolean {
+    return this.canCarry(carrier, u) && this.seatsUsed(carrier) + this.seatsOf(u) <= this.capacityOf(carrier);
+  }
+
   /** Puts a unit inside a carrier: it leaves the world until unloaded. */
   board(u: Unit, carrier: Entity): boolean {
-    if (carrier.passengers.length >= this.capacityOf(carrier)) return false;
+    if (!this.fits(carrier, u)) return false;
     u.order = { type: 'idle' };
     u.targetId = null;
     u.path = [];
@@ -816,6 +896,7 @@ export class World {
       this.emit({ type: 'destroyed', id: e.id, x: e.x, y: e.y, kind: 'building', big: e.w * e.h >= 4 });
     } else {
       owner.stats.unitsLost++;
+      if (e.naval) owner.stats.shipsLost = (owner.stats.shipsLost ?? 0) + 1;
       this.emit({
         type: 'destroyed',
         id: e.id,
@@ -977,6 +1058,11 @@ export class World {
         this.terrainVersion++;
         this.emit({ type: 'terrainDestroyed', tx, ty, was, kind });
       }
+  }
+
+  /** Navigation layer a unit moves on: water for ships, the land grid for everything else (v0.13). */
+  navFor(u: Unit): Nav {
+    return u.naval ? this.water : this.grid;
   }
 
   /** True when a ground unit or a building stands on a hill tile (high ground, v0.12). */

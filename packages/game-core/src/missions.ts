@@ -191,6 +191,61 @@ export const CAMPAIGN: MissionDef[] = [
       ],
     }),
   },
+  {
+    id: 'tidewater',
+    title: 'Tidewater',
+    subtitle: 'Strait Crossing · naval assault',
+    briefing:
+      'The enemy holds the south shore of the strait and its fleet rules the water. The isthmuses are heavily ' +
+      'watched, so this time we go by sea. Build a Naval Yard, win the strait, put troops ashore on the South Shore ' +
+      'with Landing Craft and finish the enemy. Beware of submarines: only Patrol Boats can find them.',
+    objectives: [
+      {
+        id: 'yard',
+        title: 'Build a Naval Yard',
+        hint: 'Requires a War Factory. It must touch the water: build it on the shore of your bay.',
+        done: (w, pid) => w.hasCompleted(pid, 'naval-yard'),
+      },
+      {
+        id: 'sink',
+        title: 'Sink 3 enemy ships',
+        hint: 'Destroyers outgun Patrol Boats; Submarines sink Destroyers; Patrol Boats hunt Submarines.',
+        done: (w, pid) => enemies(w, pid).reduce((s, p) => s + (p.stats.shipsLost ?? 0), 0) >= 3,
+      },
+      {
+        id: 'beach',
+        title: 'Capture the South Shore',
+        hint: 'Load infantry and tanks into a Landing Craft (right-click it), sail across and unload (U) at the beach.',
+        done: (w, pid) => pointHeld(w, pid, 'South Shore'),
+      },
+      {
+        id: 'destroy',
+        title: 'Destroy all enemy forces',
+        hint: 'Annihilation: every enemy building and unit must fall.',
+        done: (w, pid) => enemies(w, pid).every((p) => p.defeated),
+      },
+    ],
+    ordered: false,
+    config: (name, seed) => ({
+      mapId: 'strait-crossing',
+      mission: 'annihilation',
+      startingCredits: 8000,
+      seed,
+      unitCap: DEFAULT_UNIT_CAP,
+      campaignMission: 'tidewater',
+      slots: [
+        { kind: 'human', name, faction: 'western', team: 0 },
+        {
+          kind: 'ai',
+          name: 'Southern Fleet',
+          faction: 'pacific',
+          team: 1,
+          difficulty: 'normal',
+          personality: 'warlord',
+        },
+      ],
+    }),
+  },
 ];
 
 export function getMission(id: string | undefined): MissionDef | undefined {
