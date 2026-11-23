@@ -54,6 +54,18 @@ export function findPath(
   gScore[startIdx] = 0;
   const open = new MinHeap<number>();
   open.push(startIdx, octile(startX, startY, goal.x, goal.y));
+  // Tie-breaking between equally long routes (v0.16): prefer tiles near the straight start→goal line, and the right
+  // side of it over the left. Both terms are relative to the direction of travel, so they stay the same when the
+  // map is turned 180° — point-symmetric maps then give both spawns mirrored routes (a fixed neighbour order used
+  // to send one spawn around the west of an obstacle and the other one also around the west). The bonus is at most
+  // ~0.1 tile, so it never makes a path noticeably longer.
+  const lx = goal.x - startX;
+  const ly = goal.y - startY;
+  const len = Math.hypot(lx, ly) || 1;
+  const tie = (x: number, y: number): number => {
+    const c = ((x - startX) * ly - (y - startY) * lx) / len; // signed distance from the line (left > 0)
+    return 0.0008 * (Math.abs(c) + 0.5 * c);
+  };
 
   // Track the closest node to the goal so a partial path can be returned if the search budget runs out.
   let bestIdx = startIdx;
@@ -86,7 +98,7 @@ export function findPath(
       if (g < gScore[ni]) {
         gScore[ni] = g;
         cameFrom[ni] = cur;
-        open.push(ni, g + octile(nx, ny, goal.x, goal.y));
+        open.push(ni, g + octile(nx, ny, goal.x, goal.y) + tie(nx, ny));
       }
     }
   }

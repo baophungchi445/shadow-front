@@ -188,6 +188,29 @@ export const VI_DATA: Record<string, string> = {
   // ------------------------------------------------------------ campaign
   'Boot Camp': 'Trại huấn luyện',
   Tidewater: 'Thủy triều',
+  // v0.17: missions 6 and 7
+  'Iron Convoy': 'Đoàn xe thép',
+  'Snowfield · night escort': 'Snowfield · hộ tống ban đêm',
+  'A blizzard covers our advance. We have no base here: only a Mobile Command Vehicle and its escort. Bring the MCV to the Frozen Crossroads in the middle of the snowfield, deploy it into a forward base and hold it for five minutes while the Iron Guard counter-attacks. Expect an ambush on the way. Then crush them.':
+    'Bão tuyết che cho cuộc tiến quân. Ở đây ta không có căn cứ: chỉ có một Xe chỉ huy cơ động (MCV) và đoàn hộ tống. Đưa MCV tới Ngã tư Băng giá giữa cánh đồng tuyết, triển khai thành căn cứ tiền tuyến và giữ nó trong năm phút khi Iron Guard phản công. Coi chừng phục kích trên đường. Sau đó hãy đè bẹp chúng.',
+  'Escort the MCV to the Frozen Crossroads': 'Hộ tống MCV tới Ngã tư Băng giá',
+  'Move the convoy together: tanks in front. The crossroads is the flag in the middle of the map.':
+    'Di chuyển cả đoàn cùng nhau: xe tăng đi trước. Ngã tư là lá cờ ở giữa bản đồ.',
+  'Deploy the forward base': 'Triển khai căn cứ tiền tuyến',
+  'Select the MCV at the crossroads and press U (Deploy). It unfolds into a Headquarters.':
+    'Chọn MCV ở ngã tư và nhấn U (Triển khai). Xe sẽ mở ra thành Sở chỉ huy.',
+  'Hold the forward base for 5 minutes': 'Giữ căn cứ tiền tuyến trong 5 phút',
+  'Build Power Plants, Barracks and turrets around the new Headquarters. If it falls, the clock restarts.':
+    'Xây Nhà máy điện, Doanh trại và trụ phòng thủ quanh Sở chỉ huy mới. Nếu căn cứ bị phá, đồng hồ tính lại từ đầu.',
+  'Destroy the Iron Guard': 'Tiêu diệt Iron Guard',
+  'Annihilation: every enemy building and unit must fall. Tanks and artillery break their defenses.':
+    'Tiêu diệt: mọi công trình và unit địch phải bị phá hủy. Xe tăng và pháo binh phá vỡ tuyến phòng thủ của chúng.',
+  'Shadow Front': 'Mặt trận Bóng tối',
+  'Forest Warfare · final battle, 2 vs 2': 'Forest Warfare · trận cuối, 2 đấu 2',
+  'This is the last front. The Shadow Legion and the Black Sun have joined forces, and their commanders learn: they read how you fight and change their plans. Fight beside the Northern Wing, take every strategic point in the forest and destroy both enemy Headquarters. Vary your tactics — they will see a pattern.':
+    'Đây là mặt trận cuối cùng. Shadow Legion và Black Sun đã liên minh, và các chỉ huy của chúng biết học hỏi: chúng đọc cách bạn đánh và đổi kế hoạch. Chiến đấu cùng Northern Wing, chiếm mọi điểm chiến lược trong rừng và phá hủy cả hai Sở chỉ huy địch. Hãy thay đổi chiến thuật — chúng sẽ nhận ra lối mòn.',
+  'The forest points give income and vision. Your ally helps; hold them together.':
+    'Các điểm trong rừng cho thu nhập và tầm nhìn. Đồng minh sẽ hỗ trợ; hãy cùng nhau giữ chúng.',
   'Strait Crossing · naval assault': 'Strait Crossing · tấn công đường biển',
   'The enemy holds the south shore of the strait and its fleet rules the water. The isthmuses are heavily watched, so this time we go by sea. Build a Naval Yard, win the strait, put troops ashore on the South Shore with Landing Craft and finish the enemy. Beware of submarines: only Patrol Boats can find them.':
     'Địch giữ bờ nam eo biển và hạm đội của chúng làm chủ mặt nước. Hai eo đất bị canh gác gắt, nên lần này ta đi đường biển. Xây Xưởng tàu, giành quyền kiểm soát eo biển, dùng Tàu đổ bộ đưa quân lên Bờ Nam rồi tiêu diệt địch. Cẩn thận tàu ngầm: chỉ Tàu tuần tra mới phát hiện được chúng.',

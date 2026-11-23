@@ -162,6 +162,60 @@ MVP implements RUSH, FORTRESS, EAGLE, WARLORD (SHADOW falls back to balanced wei
 - **Production**: up to 6 warships; destroyers preferred, one patrol boat kept for sonar, submarines once enemy warships were seen
   (`seenShips`).
 
+## 6n. v0.16
+
+- **Fleet production**: the Naval Yard keeps working while land production is held before the first attack; near the unit cap (< 12
+  left) with fewer than 3 warships, land production pauses to leave room for ships. The yard **commits** to the warship it picked until
+  it is built, and land producers save its price while the fleet has fewer than 4 warships (a Destroyer was otherwise never afforded).
+  Losing 4 ships within 3 minutes pauses the yard for 2 minutes.
+- **Spawn fairness** (found with `pnpm --filter @shadow-front/game-ai sim`): building placement scans its ring from the map-centre side,
+  mirrored per quadrant; the hill post is the nearest hill by its **centre**, guards stand on its tiles nearest to the HQ; A* breaks ties
+  toward the straight line and its right-hand side (travel-relative, so routes are mirrored on point-symmetric maps). Identical Hard AIs:
+  spawn 1 vs spawn 2 wins went from 2–17 to 5–16 (30 matches); Highland Pass and Forest Warfare still favour spawn 2 (open issue).
+
+## 6o. v0.17 — learning during a match (`adaptation.ts`)
+
+Rule-based memory, deterministic (no machine learning). The commander reports facts, `Adaptation` turns them into
+lessons, the commander reads the parameters back. Every change emits `aiAdapted { player, tactic }`; the web client
+shows enemy changes as a message and lists them on the results screen.
+
+- **Attack lessons** (Normal+): each attack squad is settled every 90 s and when it ends: credits destroyed (squad
+  members' veterancy XP gain) vs credits lost (dead members + damage on survivors), against what was still standing.
+  Settling only at the end taught almost nothing: AI attacks grind on for many minutes.
+  - ratio < 0.5 and ≥ 20 % lost → `patience`: attack threshold ×1.3 (Insane ×1.4), capped at ×2; a second failure
+    within 10 tiles of an earlier one (8 min memory) → `switch-target`: that place gets +30 in target choice for 5 min.
+  - ratio > 1.5 and ≥ 25 % of the squad's worth destroyed → `press`: attack cooldown ×0.7, patience ÷1.3.
+- **Play style** (Hard+, Insane with lower thresholds), each answered once per match:
+  - `rush` (first assault of ≥ 3 armed enemies reaches the base before 5.5 min / 6.5 Insane) → `anti-rush`: home
+    guard (minimum army) ×1.3 for 10 minutes, slight bonus for rifles / rockets early. Two extra turrets were tried
+    first and lost more simulated matches (14–6 vs 17–4 without adaptation): they starve the economy.
+  - `turtle` (≥ 4 known defensive buildings / 3 Insane) → `siege`: artillery and range ≥ 9 units +3, a missile
+    battery once a Research Center stands, attack threshold ×1.15.
+  - `air` (≥ 30 % / 25 % of seen units) → `anti-air`: anti-air weapons +3, up to 3 SAM sites.
+  - `naval` (≥ 3 / 2 warships seen) → `anti-naval`: submarines +1.5.
+- The same tactic is announced at most once every 2 minutes (it is still learned silently).
+- Measured (`pnpm sim`, 24 matches each, a Hard Warlord against Hard Rush / Fortress opponents that do not adapt):
+  win rate about the same (Rush 16–5 vs 17–4, Fortress 11–8 vs 12–8) but **wins come sooner** (15.4 vs 17.0 and
+  18.9 vs 19.5 min). The play-style answers are aimed at human habits that AI opponents rarely show.
+
+### Finding an enemy away from the spawns (v0.17)
+
+Scouting targets are the other spawns, then the strategic points and the map centre. Once all are explored and no
+enemy building is known, the scout and attack squads patrol them in turn (`searchTarget`), so a base built where the
+AI already looked (an MCV base) is found. Units flagged `guard` (mission ambushes) are not part of the AI's army.
+
+### Memory between matches (v0.17.2)
+
+- Every commander, whatever its difficulty, records the styles it noticed (`Adaptation.detected`); the web client
+  unions those of the enemy commanders into `MatchResult.detectedStyles` (null when no enemy AI played).
+- Offline habits (`shadow-front.habits`, per browser): a moving average per style, the latest skirmish weighing 40 %
+  (`updateHabits`). Two matches in a row make a habit (≥ 0.5); a habit kept 4+ matches survives one match without
+  it. Campaign missions neither learn nor use the memory (they are scripted).
+- `startMatch` puts the habits into `MatchConfig.aiMemory` when Settings → "Hard AI remembers my play style" is on.
+  Hard / Insane commanders opposing a human `prime()` the answers at tick 0 and emit `aiAdapted { remembered: true }`
+  ("… remembers your play style: …"). AI-only matches ignore it. Settings shows the remembered habits and a Forget
+  button; resetting the profile also forgets.
+
 ## 7. Acceptance criteria
 
 - AI builds Power Plant, Extractor, Barracks, War Factory by itself.

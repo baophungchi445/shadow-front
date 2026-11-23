@@ -1,4 +1,6 @@
 import type {
+  AiTactic,
+  PlayStyle,
   Formation,
   BuildingTypeId,
   Command,
@@ -62,7 +64,25 @@ export interface MatchResult {
     defeated: boolean;
     stats: World['players'][number]['stats'];
   }[];
+  /** v0.17: tactic changes of enemy AI commanders, in order (`remembered`: prepared from earlier matches). */
+  adaptations: { name: string; tactic: AiTactic; sec: number; remembered?: boolean }[];
+  /**
+   * v0.17.2: the player's play styles noticed by enemy AI commanders this match (any difficulty); null when no
+   * enemy AI commander played (survival, tutorial, no AI) — the offline memory then stays as it was.
+   */
+  detectedStyles: PlayStyle[] | null;
 }
+
+/** v0.17: what an enemy commander's tactic change means, as told to the player. */
+export const AI_TACTIC_TEXT: Record<AiTactic, string> = {
+  patience: 'gathering a bigger army after a failed attack',
+  'switch-target': 'attacking somewhere else',
+  press: 'pressing the attack after a success',
+  'anti-rush': 'fortifying against your early attacks',
+  siege: 'bringing long-range siege weapons against your defenses',
+  'anti-air': 'building anti-air against your aircraft',
+  'anti-naval': 'building submarines against your fleet',
+};
 
 type Listener<T> = (payload: T) => void;
 
@@ -126,6 +146,8 @@ export class GameController {
   private finished = false;
   /** A unit of ours reached the Heroic rank during this match. */
   private heroic = false;
+  /** v0.17: enemy AI tactic changes seen this match. */
+  private adaptations: { name: string; tactic: AiTactic; sec: number; remembered?: boolean }[] = [];
   /** Objectives shown in the HUD (tutorial and campaign missions only). */
   readonly objectives: ObjectiveTracker | null;
   /** Title shown above the objectives. */
@@ -137,12 +159,16 @@ export class GameController {
       0,
       config.slots.findIndex((s) => s.kind === 'human'),
     );
+    // v0.17: campaign missions that start differently (e.g. a convoy without a base) set the world up first.
+    getMission(config.campaignMission)?.setup?.(this.world, this.humanId);
     // The Survival wave attacker is driven by the simulation's wave system, not an AI Commander,
     // and the tutorial outpost is passive (its units only defend themselves).
     this.ais =
       config.mission === 'tutorial'
         ? []
-        : this.world.players.filter((p) => p.isAI && !p.raider).map((p) => new AICommander(this.world, p.id));
+        : this.world.players
+            .filter((p) => p.isAI && !p.raider)
+            .map((p) => new AICommander(this.world, p.id, { remembered: config.aiMemory }));
     const mission = getMission(config.campaignMission);
     this.objectives = mission
       ? missionTracker(mission)
@@ -328,6 +354,23 @@ export class GameController {
         case 'sold':
           if (e.player === this.humanId) this.message(`Building sold for ${e.refund} credits`, 'info');
           break;
+        case 'aiAdapted': {
+          const p = this.world.players[e.player];
+          if (p.team === this.team) break;
+          this.adaptations.push({
+            name: p.name,
+            tactic: e.tactic,
+            sec: Math.floor((this.world.tick * TICK_MS) / 1000),
+            remembered: e.remembered,
+          });
+          this.message(
+            e.remembered
+              ? `${p.name} remembers your play style: ${AI_TACTIC_TEXT[e.tactic]}`
+              : `${p.name} changes tactics: ${AI_TACTIC_TEXT[e.tactic]}`,
+            'warn',
+          );
+          break;
+        }
         case 'waveSpawned':
           this.message(`Wave ${e.wave}: ${e.count} hostiles entering the area`, 'warn');
           break;
@@ -394,7 +437,18 @@ export class GameController {
         defeated: p.defeated,
         stats: { ...p.stats },
       })),
+      adaptations: [...this.adaptations],
+      detectedStyles: this.detectedStyles(),
     };
+  }
+
+  /** Play styles of the human noticed by the enemy AI commanders (null when none played). */
+  private detectedStyles(): PlayStyle[] | null {
+    const foes = this.ais.filter((a) => this.world.players[a.playerId].team !== this.team);
+    if (!foes.length) return null;
+    const out = new Set<PlayStyle>();
+    for (const a of foes) for (const s of a.adapt.detected) out.add(s);
+    return [...out];
   }
 
   surrender(): void {
@@ -705,7 +759,8 @@ export class GameController {
   }
 
   centerOnBase(): void {
-    const hq = this.world.playerBuildings(this.humanId)[0];
+    // No base yet (Iron Convoy starts with a convoy only): look at our units instead.
+    const hq = this.world.playerBuildings(this.humanId)[0] ?? this.world.playerUnits(this.humanId)[0];
     if (hq) this.centerOn(hq.x, hq.y);
   }
 

@@ -84,6 +84,8 @@ export interface Unit extends EntityBase {
   moving: boolean;
   stuckTicks: number;
   lastDist: number;
+  /** v0.17: placed by a campaign mission to hold a spot (an ambush); AI commanders never give it orders. */
+  guard?: boolean;
   /** Veterancy experience (credits worth of enemies destroyed) and rank 0..3. */
   xp: number;
   rank: number;

@@ -28,13 +28,17 @@ export function findPlacement(
   const def = BUILDINGS[type];
   const ox = Math.floor(cx - def.w / 2);
   const oy = Math.floor(cy - def.h / 2);
+  // The ring is scanned from the map-centre side first, mirrored per quadrant, so every spawn corner gets the same
+  // layout. (A fixed top-left-first scan pushed the north-west base into its corner and gave the south-east spawn a
+  // large edge in AI-vs-AI matches — v0.16.)
+  const sx = cx < world.map.width / 2 ? -1 : 1;
+  const sy = cy < world.map.height / 2 ? -1 : 1;
   for (let r = 0; r <= maxRadius; r++) {
     for (let j = -r; j <= r; j++)
       for (let i = -r; i <= r; i++) {
         if (Math.max(Math.abs(i), Math.abs(j)) !== r) continue;
-        const flip = (globalThis as { __flip?: boolean }).__flip ? -1 : 1;
-        const tx = ox + i * flip;
-        const ty = oy + j * flip;
+        const tx = ox + i * sx;
+        const ty = oy + j * sy;
         if (world.placementError(player, type, tx, ty)) continue;
         if (!hasClearBorder(world, tx, ty, def.w, def.h)) continue;
         return { tx, ty };

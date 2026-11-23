@@ -99,6 +99,16 @@ export type MapId =
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'insane';
 export type Personality = 'rush' | 'fortress' | 'eagle' | 'shadow' | 'warlord';
 /**
+ * v0.17: a tactical change an AI commander made after learning from the match.
+ * - patience: its attack failed badly → it gathers a bigger army before the next one
+ * - switch-target: two attacks failed at the same place → it strikes elsewhere
+ * - press: its attack succeeded → it attacks again sooner
+ * - anti-rush / siege / anti-air / anti-naval: answers to the opponent's play style
+ */
+export type AiTactic = 'patience' | 'switch-target' | 'press' | 'anti-rush' | 'siege' | 'anti-air' | 'anti-naval';
+/** v0.17: an opponent's play style as an AI commander reads it. */
+export type PlayStyle = 'rush' | 'turtle' | 'air' | 'naval';
+/**
  * annihilation / decapitation: skirmish victory conditions.
  * survival: hold out against escalating enemy waves (offline only).
  * tutorial: guided objectives against a passive AI (offline only).

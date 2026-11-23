@@ -143,3 +143,38 @@ HUD clicks not reaching the battlefield, pause stopping the simulation, surrende
   its fog vision), revealed by a Patrol Boat and hunted down, Submarine in the selection panel. Screenshots: hidden enemy sub, see-through
   own sub.
 
+## v0.16 additions
+
+- game-core: Tidewater mission (unlock order, player north / enemy south, Naval Yard objective, 3 ships sunk, South Shore captured);
+  a match with `mapSea` gets the Coast variant.
+- game-data: 25 random seeds with sea are playable (sea ≥ 300 tiles, a Naval Yard site at all 4 spawns, no "Centre"); the same seed
+  without sea keeps "Centre".
+- game-ai: the AI still builds ships while it holds land production.
+- Balance simulations (`pnpm --filter @shadow-front/game-ai sim`, ~3 min, print tables, no assertions): spawn fairness of identical
+  Hard Warlords on 5 symmetric maps, ships built / lost on 3 sea maps.
+- Browser: `round16` suite (7 checks): Tidewater unlocked, starts on Strait Crossing with the Naval Yard objective; random map Sea
+  checkbox gives a "Coast" map with a big sea and no Centre, choice remembered; a Hard AI given a yard and Research Center queues a
+  Destroyer.
+
+## v0.17 additions
+
+- game-ai `adaptation.test.ts` (9): rules (Easy never adapts; patience / switch-target / press; cap; small groups
+  ignored; announcement throttle; Hard reads styles once each; Insane sooner) and in a match (4 known turrets → siege
+  event, threshold ×1.15, artillery preferred, missile battery in the build list; an early assault → anti-rush and a
+  bigger home guard; a wiped-out attack → patience).
+- `pnpm sim` adds: adaptive vs non-adaptive Hard AIs (sides swapped), and the same Warlord with / without adaptation
+  against Rush and Fortress opponents (24 matches each).
+- game-ai memory (4): habits moving average (habit after 2 matches, long habit survives a gap), sanitizing,
+  every difficulty notices but only Hard+ act / prime, a Hard commander facing a human primes from memory and
+  announces it while an AI-only match ignores it.
+- game-core missions (+2): Iron Convoy (no base, convoy + 7-unit ambush, not defeated without buildings, escort →
+  deploy → 5-minute hold whose clock restarts when the base falls → destroy) and Shadow Front (2 vs 2 Hard,
+  all points + both HQs, decapitation win); unlock order for 7 missions.
+- Browser: `round17b` suite (11 checks): Shadow Front locked until Iron Convoy; Iron Convoy briefing, Snowfield /
+  snow / night, no base + convoy + ambush, U deploys the MCV at the crossroads, objectives advance to the hold;
+  Shadow Front 2 vs 2 against Hard commanders with its objectives; Vietnamese names and briefing. `campaign` suite
+  now expects 7 missions.
+- Browser: `round17` suite (12 checks): a Hard enemy that knows 4+ player turrets announces the siege tactic in the
+  match; the results screen lists it; the turtling is saved to the memory (0.4); no section when nothing was
+  adapted; Settings shows "Remembered: heavy defenses"; a Hard AI prepares from memory (message, marked on the
+  results screen); option off → fresh AI; Forget clears; Vietnamese message and results section.

@@ -10,7 +10,8 @@ import {
   UNITS,
   UNIT_IDS,
 } from '@shadow-front/game-data';
-import type { ArmorClass, WeaponType } from '@shadow-front/shared-types';
+import type { ArmorClass, PlayStyle, WeaponType } from '@shadow-front/shared-types';
+import { rememberedStyles } from '@shadow-front/game-ai';
 import { useApp } from '../stores/appStore';
 import {
   ACTION_LABELS,
@@ -271,9 +272,18 @@ function KeybindTable() {
   );
 }
 
+/** v0.17.2: what each remembered habit is called. */
+const HABIT_NAMES: Record<PlayStyle, string> = {
+  rush: 'early attacks',
+  turtle: 'heavy defenses',
+  air: 'aircraft',
+  naval: 'fleets',
+};
+
 export function SettingsPage() {
-  const { settings, updateSettings } = useApp();
+  const { settings, updateSettings, habits, forgetHabits } = useApp();
   const t = useT();
+  const remembered = rememberedStyles(habits);
   return (
     <Shell title="Settings">
       <div className="max-w-md space-y-4 text-sm">
@@ -312,6 +322,28 @@ export function SettingsPage() {
           />
           <span className="w-8 tabular-nums text-gray-400">{settings.scrollSpeed.toFixed(1)}</span>
         </label>
+        <div className="space-y-1" data-testid="ai-memory">
+          <label className="flex items-center justify-between">
+            <span>{t('Hard AI remembers my play style')}</span>
+            <input
+              type="checkbox"
+              checked={settings.aiMemory}
+              onChange={(e) => updateSettings({ aiMemory: e.target.checked })}
+            />
+          </label>
+          <div className="flex items-center justify-between gap-4 text-xs text-gray-500">
+            <span>
+              {remembered.length
+                ? t('Remembered: {list}', { list: remembered.map((s) => t(HABIT_NAMES[s])).join(', ') })
+                : t('Nothing remembered yet (a style seen in two skirmishes in a row becomes a habit).')}
+            </span>
+            {Object.values(habits).some((v) => v > 0) && (
+              <button className="btn px-2 py-0.5 text-xs" onClick={forgetHabits}>
+                {t('Forget')}
+              </button>
+            )}
+          </div>
+        </div>
         <label className="flex items-center justify-between">
           <span>{t('Show FPS counter')}</span>
           <input

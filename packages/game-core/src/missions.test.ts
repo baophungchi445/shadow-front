@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { World } from './world';
-import { CAMPAIGN, getMission, missionTracker, missionUnlocked } from './missions';
+import { CAMPAIGN, CONVOY_HOLD_TICKS, CONVOY_SITE, getMission, missionTracker, missionUnlocked } from './missions';
 
 describe('campaign', () => {
   it('every mission builds a valid world', () => {
@@ -26,7 +26,14 @@ describe('campaign', () => {
       'urban-conflict',
       'highland-pass',
       'strait-crossing',
+      'snowfield',
+      'forest-warfare',
     ]);
+    const before = (id: string) => CAMPAIGN.slice(0, CAMPAIGN.findIndex((m) => m.id === id)).map((m) => m.id);
+    expect(missionUnlocked('iron-convoy', before('tidewater'))).toBe(false);
+    expect(missionUnlocked('iron-convoy', before('iron-convoy'))).toBe(true);
+    expect(missionUnlocked('shadow-front', before('iron-convoy'))).toBe(false);
+    expect(missionUnlocked('shadow-front', before('shadow-front'))).toBe(true);
     expect(missionUnlocked('tidewater', ['boot-camp', 'hold-the-river', 'iron-fist'])).toBe(false);
     expect(missionUnlocked('tidewater', ['boot-camp', 'hold-the-river', 'iron-fist', 'highland-siege'])).toBe(true);
   });
@@ -85,5 +92,90 @@ describe('campaign', () => {
     expect(t.update(w, 0, ui).map((o) => o.id)).toEqual(['beach']);
     expect(t.done).toEqual([true, true, true, false]);
   });
-});
 
+  it('Iron Convoy: no base, a convoy and an ambush; escort → deploy → hold 5 min (clock restarts) → destroy (v0.17)', () => {
+    const m = getMission('iron-convoy')!;
+    const w = new World(m.config('Tester', 2));
+    m.setup!(w, 0);
+    expect(w.playerBuildings(0)).toEqual([]);
+    const own = w.playerUnits(0).map((u) => u.type);
+    expect(own).toContain('mcv');
+    expect(own.filter((t) => t === 'main-battle-tank').length).toBe(2);
+    expect(w.playerUnits(1).some((u) => Math.hypot(u.x - 20, u.y - 20) < 4)).toBe(true); // the ambush
+    // With an armed escort the player is not defeated for having no buildings.
+    w.step();
+    expect(w.players[0].defeated).toBe(false);
+    const t = missionTracker(m);
+    const ui = { selectedOwnUnits: 0 };
+    t.update(w, 0, ui);
+    expect(t.index).toBe(0);
+    // Drive the MCV to the crossroads and deploy it there.
+    const mcv = w.playerUnits(0).find((u) => u.type === 'mcv')!;
+    mcv.x = CONVOY_SITE.x;
+    mcv.y = CONVOY_SITE.y;
+    w.updateFog(); // it saw the way while driving there
+    t.update(w, 0, ui);
+    expect(t.index).toBe(1);
+    const hq = w.deploy(mcv);
+    expect(typeof hq).not.toBe('string');
+    const base = hq as Exclude<typeof hq, string>;
+    base.progress = 1;
+    base.complete = true;
+    base.hp = base.maxHp;
+    t.update(w, 0, ui);
+    expect(t.index).toBe(2);
+    // Hold: 5 minutes from completion; losing the base restarts the clock.
+    for (let i = 0; i < CONVOY_HOLD_TICKS - 100; i++) {
+      w.tick++;
+      t.update(w, 0, ui);
+    }
+    expect(t.index).toBe(2);
+    w.removeBuilding(base);
+    t.update(w, 0, ui);
+    expect(w.missionMarks.has('hold:0')).toBe(false);
+    const again = w.createBuilding(0, 'headquarters', base.tx, base.ty, true);
+    expect(again.complete).toBe(true);
+    t.update(w, 0, ui); // the clock starts now
+    for (let i = 0; i < CONVOY_HOLD_TICKS - 1; i++) {
+      w.tick++;
+      t.update(w, 0, ui);
+    }
+    expect(t.index).toBe(2);
+    w.tick++;
+    t.update(w, 0, ui);
+    expect(t.index).toBe(3);
+    // Last: the Iron Guard falls.
+    for (const e of [...w.playerBuildings(1), ...w.playerUnits(1)]) w.destroy(e);
+    for (let i = 0; i < 40; i++) w.step();
+    t.update(w, 0, ui);
+    expect(t.finished).toBe(true);
+  });
+
+  it('Shadow Front: 2 vs 2 against Hard (adaptive) commanders; all points + both HQs (v0.17)', () => {
+    const m = getMission('shadow-front')!;
+    const cfg = m.config('Tester', 4);
+    expect(cfg.mission).toBe('decapitation');
+    expect(cfg.slots.filter((s) => s.team === 1).every((s) => s.difficulty === 'hard')).toBe(true);
+    expect(cfg.slots.filter((s) => s.team === 0).length).toBe(2);
+    const w = new World(cfg);
+    const t = missionTracker(m);
+    const ui = { selectedOwnUnits: 0 };
+    for (const pt of w.points.slice(0, -1)) pt.team = 0;
+    t.update(w, 0, ui);
+    expect(t.done).toEqual([false, false]);
+    w.points[w.points.length - 1].team = 0;
+    t.update(w, 0, ui);
+    expect(t.done).toEqual([true, false]);
+    // Points lost again: the objective stays done; one HQ is not enough.
+    for (const pt of w.points) pt.team = 1;
+    w.destroy(w.playerBuildings(2).find((b) => b.type === 'headquarters')!);
+    for (let i = 0; i < 40; i++) w.step();
+    t.update(w, 0, ui);
+    expect(t.done).toEqual([true, false]);
+    w.destroy(w.playerBuildings(3).find((b) => b.type === 'headquarters')!);
+    for (let i = 0; i < 40; i++) w.step();
+    t.update(w, 0, ui);
+    expect(t.done).toEqual([true, true]);
+    expect(w.winningTeam).toBe(0);
+  });
+});

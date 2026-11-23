@@ -15,6 +15,13 @@ import {
   type Profile,
 } from '@shadow-front/game-core';
 import type { Language } from '../i18n';
+import {
+  NO_HABITS,
+  rememberedStyles,
+  sanitizeHabits,
+  updateHabits,
+  type Habits,
+} from '@shadow-front/game-ai';
 
 export type Screen =
   | 'menu'
@@ -48,6 +55,8 @@ export interface Settings {
   formation: Formation;
   /** UI language. */
   language: Language;
+  /** v0.17.2: Hard / Insane AI remembers the player's habits between skirmishes. */
+  aiMemory: boolean;
 }
 
 const SETTINGS_KEY = 'shadow-front.settings';
@@ -65,6 +74,7 @@ function loadSettings(): Settings {
     panSensitivity: 1,
     formation: 'spread',
     language: 'en',
+    aiMemory: true,
   };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
@@ -85,6 +95,7 @@ function loadSettings(): Settings {
       zoomSpeed: clamp(stored.zoomSpeed, 1),
       panSensitivity: clamp(stored.panSensitivity, 1),
       language: stored.language === 'vi' ? 'vi' : 'en',
+      aiMemory: stored.aiMemory !== false,
       keybinds: sanitizeKeys(stored.keybinds),
       formation: FORMATIONS.includes(stored.formation as Formation)
         ? (stored.formation as Formation)
@@ -96,6 +107,25 @@ function loadSettings(): Settings {
 }
 
 const CAMPAIGN_KEY = 'shadow-front.campaign';
+const HABITS_KEY = 'shadow-front.habits';
+
+/** v0.17.2: the player's play-style habits as the AI remembers them (per browser). */
+export function loadHabits(): Habits {
+  try {
+    const raw = localStorage.getItem(HABITS_KEY);
+    return raw ? sanitizeHabits(JSON.parse(raw)) : { ...NO_HABITS };
+  } catch {
+    return { ...NO_HABITS };
+  }
+}
+
+function saveHabits(h: Habits): void {
+  try {
+    localStorage.setItem(HABITS_KEY, JSON.stringify(h));
+  } catch {
+    // Storage unavailable — the memory only lasts for this session.
+  }
+}
 const PROFILE_KEY = 'shadow-front.profile';
 
 function loadProfile(): Profile {
@@ -148,9 +178,13 @@ interface AppState {
   settings: Settings;
   completedMissions: string[];
   profile: Profile;
+  /** v0.17.2: the player's habits as the AI remembers them. */
+  habits: Habits;
   lastProgress: LastProgress | null;
   updateProfile: (patch: Partial<Pick<Profile, 'nickname' | 'emblem' | 'title' | 'avatar'>>) => void;
   resetProfile: () => void;
+  /** v0.17.2: clears the remembered habits. */
+  forgetHabits: () => void;
   go: (screen: Screen) => void;
   startMatch: (match: MatchConfig) => void;
   finishMatch: (result: MatchResult) => void;
@@ -172,6 +206,7 @@ export const useApp = create<AppState>((set, get) => ({
   settings: loadSettings(),
   completedMissions: loadCampaign(),
   profile: loadProfile(),
+  habits: loadHabits(),
   lastProgress: null,
   updateProfile: (patch) => {
     const profile = { ...get().profile, ...patch };
@@ -181,10 +216,23 @@ export const useApp = create<AppState>((set, get) => ({
   resetProfile: () => {
     const profile = newProfile(get().profile.nickname);
     saveProfile(profile);
-    set({ profile });
+    saveHabits({ ...NO_HABITS });
+    set({ profile, habits: { ...NO_HABITS } });
+  },
+  forgetHabits: () => {
+    saveHabits({ ...NO_HABITS });
+    set({ habits: { ...NO_HABITS } });
   },
   go: (screen) => set({ screen }),
-  startMatch: (match) => set({ match, result: null, screen: 'game' }),
+  startMatch: (match) => {
+    // v0.17.2: skirmishes carry the remembered habits (campaign missions are scripted and stay as designed).
+    const remembered = rememberedStyles(get().habits);
+    const withMemory: MatchConfig =
+      get().settings.aiMemory && !match.campaignMission && remembered.length
+        ? { ...match, aiMemory: remembered }
+        : { ...match, aiMemory: undefined };
+    set({ match: withMemory, result: null, screen: 'game' });
+  },
   finishMatch: (result) => {
     let completedMissions = get().completedMissions;
     if (result.victory && result.campaignMission && !completedMissions.includes(result.campaignMission)) {
@@ -194,7 +242,13 @@ export const useApp = create<AppState>((set, get) => ({
     const campaignComplete = CAMPAIGN.every((m) => completedMissions.includes(m.id));
     const progress = applyMatch(get().profile, { ...result.summary, campaignComplete }, Date.now());
     saveProfile(progress.profile);
+    let habits = get().habits;
+    if (result.detectedStyles && !result.campaignMission) {
+      habits = updateHabits(habits, result.detectedStyles);
+      saveHabits(habits);
+    }
     set({
+      habits,
       completedMissions,
       profile: progress.profile,
       lastProgress: {

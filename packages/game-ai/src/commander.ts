@@ -1,4 +1,12 @@
-import type { ArmorClass, BuildingTypeId, PlayerId, TeamId, UnitTypeId } from '@shadow-front/shared-types';
+import type {
+  AiTactic,
+  ArmorClass,
+  BuildingTypeId,
+  PlayerId,
+  PlayStyle,
+  TeamId,
+  UnitTypeId,
+} from '@shadow-front/shared-types';
 import {
   BALANCE,
   BUILDINGS,
@@ -16,6 +24,7 @@ import {
 } from '@shadow-front/game-data';
 import type { Building, Unit, World } from '@shadow-front/game-core';
 import { findExtractorSite, findPlacement, findShoreSite } from './placement';
+import { Adaptation } from './adaptation';
 
 export type AIState = 'opening' | 'buildup' | 'attack' | 'defend';
 
@@ -51,6 +60,11 @@ interface Squad {
   ids: Set<number>;
   startHp: number;
   target: { x: number; y: number } | null;
+  /** v0.17: where the attack was sent and what each member was worth (to learn from the outcome). */
+  origin?: { x: number; y: number };
+  members?: Map<number, { cost: number; xp0: number; xp: number; hpFrac: number; alive: boolean }>;
+  /** Totals at the last settlement: attacks are judged every 90 s, not only when the squad is gone. */
+  settled?: { tick: number; dealt: number; lost: number };
   /** Infantry are boarding the squad's APCs until this tick; the APCs wait for them. */
   mountUntil?: number;
 }
@@ -89,6 +103,8 @@ export class AICommander {
   private threatArmor = 0;
   private scoutId: number | null = null;
   private scoutTargets: { x: number; y: number }[] = [];
+  /** Next scouting target to re-check once all of them are explored (v0.17). */
+  private patrolIdx = 0;
   private squads: Squad[] = [];
   private lastAttackTick = 0;
   private lastHelpTick = -10000;
@@ -116,6 +132,14 @@ export class AICommander {
     target: { x: number; y: number } | null;
     beach: { x: number; y: number } | null;
   } | null = null;
+  /** v0.16: price of the warship the Naval Yard is waiting to afford (land production saves for it). */
+  private pendingShipCost = 0;
+  /** v0.16: the warship the yard committed to (kept until built, so a Destroyer is not swapped for a cheap boat). */
+  private pendingShip: UnitTypeId | null = null;
+  /** v0.16: ticks at which our ships were lost (recent losses pause naval production so the fleet is not fed). */
+  private shipLossTicks: number[] = [];
+  private shipsLostSeen = 0;
+  private navalPauseUntil = 0;
   /** v0.15: decaying count of enemy warships seen (drives submarine production). */
   private seenShips = 0;
   /** v0.15: where the fleet was last sent (to avoid re-issuing the same order every think). */
@@ -126,14 +150,21 @@ export class AICommander {
   private openingDone = false;
   /** Debug/telemetry: last decision made, shown in dev overlay. */
   lastDecision = '';
+  /** v0.17: what this commander learned during the match (attack outcomes, the opponent's play style). */
+  readonly adapt: Adaptation;
+  /** Tick of the first real assault (>= 3 armed enemies) on our base. */
+  private firstAssaultTick: number | null = null;
 
   constructor(
     private readonly world: World,
     readonly playerId: PlayerId,
+    /** v0.17.2: the human opponent's remembered habits (`MatchConfig.aiMemory`). */
+    opts: { remembered?: readonly PlayStyle[] } = {},
   ) {
     const p = world.players[playerId];
     this.diff = DIFFICULTY[p.difficulty ?? 'normal'];
     this.pers = PERSONALITIES[p.personality ?? 'warlord'];
+    this.adapt = new Adaptation(p.difficulty ?? 'normal');
     this.rnd = mulberry32((world.seed ^ 0x5eed) + playerId * 7919);
     // Spawn locations are public map knowledge (like reading the map before a match).
     const own = world.map.spawns[p.spawnIndex];
@@ -141,6 +172,15 @@ export class AICommander {
       .filter((s) => s !== own)
       .map((s) => ({ x: s.tx + 1.5, y: s.ty + 1.5 }))
       .sort((a, b) => Math.hypot(a.x - own.tx, a.y - own.ty) - Math.hypot(b.x - own.tx, b.y - own.ty));
+    // v0.17: then the strategic points and the map centre — an enemy may build away from any spawn
+    // (a Mobile Command Vehicle base, the Iron Convoy mission).
+    for (const pt of world.points) this.scoutTargets.push({ x: pt.x, y: pt.y });
+    this.scoutTargets.push({ x: world.map.width / 2, y: world.map.height / 2 });
+    // Memory is about the human player: only commanders facing a human use it.
+    const facesHuman = world.players.some((q) => !q.isAI && !q.raider && q.team !== p.team);
+    if (opts.remembered?.length && facesHuman)
+      for (const tactic of this.adapt.prime(opts.remembered))
+        world.emit({ type: 'aiAdapted', player: playerId, tactic, remembered: true });
   }
 
   private get player() {
@@ -155,6 +195,7 @@ export class AICommander {
     this.manageBase();
     this.manageProduction();
     this.manageArmy();
+    this.learn();
     this.manageTech();
     this.manageExpansion();
   }
@@ -274,6 +315,64 @@ export class AICommander {
 
   // ------------------------------------------------------------ perception
 
+  // ------------------------------------------------------------ learning (v0.17)
+
+  /** Reads the opponent's play style from what the team has seen and announces new answers. */
+  private learn(): void {
+    const seenUnits =
+      this.seenArmor.infantry + this.seenArmor.light + this.seenArmor.heavy + this.seenArmor.air + this.seenShips;
+    let enemyDefenses = 0;
+    for (const k of this.known.values()) if (BUILDINGS[k.type].weapon || k.type === 'bunker') enemyDefenses++;
+    const changed = this.adapt.observe({
+      tick: this.world.tick,
+      firstAssaultTick: this.firstAssaultTick,
+      enemyDefenses,
+      seenUnits,
+      seenAir: this.seenArmor.air,
+      seenShips: this.seenShips,
+    });
+    this.announce(changed);
+  }
+
+  private announce(tactics: readonly AiTactic[]): void {
+    for (const tactic of tactics) {
+      this.world.emit({ type: 'aiAdapted', player: this.playerId, tactic });
+      this.lastDecision = `adapt: ${tactic}`;
+    }
+  }
+
+  /**
+   * Judges an attack squad on what happened since its last settlement (every 90 s while it fights, and once more
+   * when it is gone): credits worth destroyed vs lost, measured against what was still standing at the start.
+   * AI attacks often grind on for many minutes, so waiting for the squad to end would rarely teach anything.
+   */
+  private settleSquad(sq: Squad): void {
+    if (!sq.members || !sq.origin) return;
+    let total = 0;
+    let dealt = 0;
+    let lost = 0;
+    for (const m of sq.members.values()) {
+      total += m.cost;
+      dealt += Math.max(0, m.xp - m.xp0);
+      lost += m.alive ? m.cost * (1 - m.hpFrac) : m.cost;
+    }
+    const prev = sq.settled ?? { tick: 0, dealt: 0, lost: 0 };
+    sq.settled = { tick: this.world.tick, dealt, lost };
+    const wDealt = Math.max(0, dealt - prev.dealt);
+    const wLost = Math.max(0, lost - prev.lost); // healed survivors can make the window negative
+    if (wDealt + wLost < 400) return; // a quiet march: nothing to learn
+    this.announce(
+      this.adapt.recordAttack({
+        tick: this.world.tick,
+        x: sq.origin.x,
+        y: sq.origin.y,
+        sent: total - prev.lost,
+        dealt: wDealt,
+        lost: wLost,
+      }),
+    );
+  }
+
   private perceive(): void {
     const team = this.player.team;
     // The estimate halves in about 2 minutes without new sightings.
@@ -321,14 +420,15 @@ export class AICommander {
       this.openingDone = true;
       if (this.state === 'opening') this.state = 'buildup';
     }
+    const defenses = this.count('defense-turret') + this.count('sam-site');
     const maxExtractors = Math.min(this.diff.maxExtractors, this.pers.economyCap ?? Infinity);
     if (this.count('resource-extractor') < maxExtractors) return 'resource-extractor';
-    const defenses = this.count('defense-turret') + this.count('sam-site');
     if (defenses < this.pers.defenses)
       return this.seenArmor.air > 2 && this.count('sam-site') <= this.count('defense-turret')
         ? 'sam-site'
         : 'defense-turret';
     if (this.seenArmor.air > 3 && this.count('sam-site') < 2) return 'sam-site';
+    if (this.adapt.has('air') && this.count('sam-site') < 3) return 'sam-site';
     if (this.count('war-factory') < 1) return 'war-factory';
     // The faction's own building (two derricks for the Desert Corps: they are its extra economy).
     const own = factionBuilding(this.player.faction);
@@ -351,6 +451,13 @@ export class AICommander {
     // Defensive personalities add a long-range missile battery once they can.
     if (
       this.pers.defenses >= 2 &&
+      this.count('missile-launcher') < 1 &&
+      this.world.hasCompleted(this.playerId, 'research-center')
+    )
+      return 'missile-launcher';
+    // v0.17: against a fortified opponent, a long-range missile battery outranges its turrets.
+    if (
+      this.adapt.has('turtle') &&
       this.count('missile-launcher') < 1 &&
       this.world.hasCompleted(this.playerId, 'research-center')
     )
@@ -451,7 +558,10 @@ export class AICommander {
    * (counters early rushes; checked from minute 2).
    */
   private minArmy(): number {
-    return this.diff.attackValue * Math.min(0.8, Math.max(0.35, this.world.tick / 9000));
+    // v0.17: against a rusher, keep a bigger home guard during the first 10 minutes (extra turrets were tried
+    // first and lost more matches: they starve the economy).
+    const guard = this.adapt.has('rush') && this.world.tick < 12000 ? 1.3 : 1;
+    return this.diff.attackValue * Math.min(0.8, Math.max(0.35, this.world.tick / 9000)) * guard;
   }
 
   private underDefended(): boolean {
@@ -488,7 +598,7 @@ export class AICommander {
       const fleet = own.filter((u) => u.naval && u.def.weapon);
       if (fleet.length >= 6) return -1;
       let score = type === 'destroyer' ? 2 : 1.5;
-      if (def.submarine) score = this.seenShips >= 1 ? 2.6 : 0.5;
+      if (def.submarine) score = (this.seenShips >= 1 ? 2.6 : 0.5) + (this.adapt.has('naval') ? 1.5 : 0);
       if (type === 'patrol-boat' && fleet.filter((u) => u.type === 'patrol-boat').length < 1) score += 0.6;
       return score * (0.75 + this.rnd() * 0.5);
     }
@@ -533,13 +643,23 @@ export class AICommander {
         if (w.canTargetAir) s += air * 4;
       }
     }
+    // v0.17: answers to the opponent's play style.
+    const wpn = def.weapon;
+    if (wpn) {
+      if (this.adapt.has('turtle') && (def.category === 'artillery' || wpn.range >= 9)) s += 3;
+      if (this.adapt.has('air') && wpn.canTargetAir) s += 3;
+      if (this.adapt.has('rush') && this.world.tick < 9 * 1200 && (wpn.type === 'bullet' || wpn.type === 'rocket'))
+        s += 1;
+    }
     if (!def.weapon) s *= this.scoutId === null && this.known.size === 0 ? 1 : 0.1;
     return s * (0.75 + this.rnd() * 0.5);
   }
 
   /** Army value at which an attack is launched. */
   private attackThreshold(): number {
-    return this.diff.attackValue * this.pers.aggression;
+    // v0.17: failed attacks make the commander more patient; against a fortified opponent it masses a siege army.
+    const siege = this.adapt.has('turtle') ? 1.15 : 1;
+    return this.diff.attackValue * this.pers.aggression * this.adapt.patience * siege;
   }
 
   /** Earliest tick for the first attack; personalities scale it (RUSH earlier, FORTRESS later). */
@@ -566,8 +686,17 @@ export class AICommander {
     // first, otherwise cheap land units always spend the credits before a ship can be afforded.
     const land = holding || saveSupply ? [] : all.filter((b) => b.type !== 'naval-yard').slice(0, this.diff.maxProducers);
     const producers = fleetSize < 3 ? [...yards, ...land] : [...land, ...yards];
+    // Fleet losses: 4 ships sunk within 3 minutes pause the yard for 2 minutes (v0.16).
+    const sunk = this.player.stats.shipsLost ?? 0;
+    for (; this.shipsLostSeen < sunk; this.shipsLostSeen++) this.shipLossTicks.push(w.tick);
+    this.shipLossTicks = this.shipLossTicks.filter((t) => w.tick - t < 3600);
+    if (this.shipLossTicks.length >= 4 && w.tick >= this.navalPauseUntil) {
+      this.navalPauseUntil = w.tick + 2400;
+      this.shipLossTicks = [];
+    }
     for (const b of producers) {
       if (b.queue.length >= 2) continue;
+      if (b.type === 'naval-yard' && w.tick < this.navalPauseUntil) continue;
       const options = (Object.keys(UNITS) as UnitTypeId[]).filter(
         (t) =>
           UNITS[t].producedBy === b.type &&
@@ -584,14 +713,32 @@ export class AICommander {
           best = t;
         }
       }
+      // The yard sticks to the warship it is saving for.
+      if (b.type === 'naval-yard' && this.pendingShip && options.includes(this.pendingShip) && bestS >= 0 && UNITS[this.pendingShip].weapon)
+        best = this.pendingShip;
       if (!best || bestS < 0) continue;
       if (w.overCap(this.playerId, best)) {
         this.lastDecision = 'at unit limit';
         continue;
       }
-      // Until the first two warships exist, land units only spend what is left above the price of a ship.
-      const saveForShip = b.type !== 'naval-yard' && yards.length > 0 && fleetSize < 2 ? UNITS['patrol-boat'].cost : 0;
-      if (this.player.credits - w.unitCost(this.playerId, best) < this.reserve() + saveForShip) continue;
+      // Until the first two warships exist, land units only spend what is left above the price of a ship; while the
+      // fleet is small they also save for the warship the yard is waiting for (a Destroyer costs far more than the
+      // land units that would otherwise always spend the credits first — v0.16).
+      const saveForShip =
+        b.type === 'naval-yard' || yards.length === 0
+          ? 0
+          : Math.max(fleetSize < 2 ? UNITS['patrol-boat'].cost : 0, fleetSize < 4 ? this.pendingShipCost : 0);
+      if (this.player.credits - w.unitCost(this.playerId, best) < this.reserve() + saveForShip) {
+        if (b.type === 'naval-yard' && b.queue.length === 0) {
+          this.pendingShipCost = w.unitCost(this.playerId, best);
+          this.pendingShip = best;
+        }
+        continue;
+      }
+      if (b.type === 'naval-yard') {
+        this.pendingShipCost = 0;
+        this.pendingShip = null;
+      }
       const res = w.issue({ type: 'produce', player: this.playerId, producer: b.id, unit: best });
       if (res.ok) this.lastDecision = `produce ${best}`;
       // Gather produced units in front of the base.
@@ -608,7 +755,8 @@ export class AICommander {
   // ------------------------------------------------------------ army
 
   private army(): Unit[] {
-    return this.world.playerUnits(this.playerId).filter((u) => u.def.weapon && u.id !== this.scoutId);
+    // Mission guards (an ambush, v0.17) hold their spot: they are not part of the commander's army.
+    return this.world.playerUnits(this.playerId).filter((u) => u.def.weapon && u.id !== this.scoutId && !u.guard);
   }
 
   private armyValue(units: Unit[]): number {
@@ -671,6 +819,8 @@ export class AICommander {
           y: cy,
           attackMove: true,
         });
+      const attackers = threats.filter((e) => e.kind === 'unit' && e.def.weapon);
+      if (attackers.length >= 3 && this.firstAssaultTick === null) this.firstAssaultTick = w.tick;
       // Ask allied commanders for help against a real assault.
       if (threats.length >= 3)
         board(helpCalls, w).set(team, { x: cx, y: cy, tick: w.tick, from: this.playerId });
@@ -708,15 +858,28 @@ export class AICommander {
 
     // 3. Maintain attack squads.
     this.squads = this.squads.filter((sq) => {
+      if (sq.members)
+        for (const [id, m] of sq.members) {
+          const u = w.get(id);
+          if (u && u.kind === 'unit') {
+            m.xp = u.xp;
+            m.hpFrac = u.hp / u.maxHp;
+          } else if (!carried.has(id)) m.alive = false;
+        }
       for (const id of [...sq.ids]) if (!w.get(id) && !carried.has(id)) sq.ids.delete(id);
       const units = [...sq.ids].map((id) => w.get(id)).filter((u): u is Unit => !!u && u.kind === 'unit');
-      if (!units.length) return false;
+      if (!units.length) {
+        this.settleSquad(sq);
+        return false;
+      }
       const hp = units.reduce((s, u) => s + u.hp, 0);
       if (this.diff.retreats && hp < sq.startHp * 0.35) {
         w.issue({ type: 'retreat', player: this.playerId, units: units.map((u) => u.id) });
         this.lastDecision = 'retreat';
+        this.settleSquad(sq);
         return false;
       }
+      if (sq.settled && w.tick - sq.settled.tick >= 1800) this.settleSquad(sq);
       // Mounting: APCs wait for their passengers; stragglers are released when time runs out.
       if (sq.mountUntil !== undefined) {
         const boarding = units.filter((u) => u.order.type === 'board');
@@ -792,7 +955,7 @@ export class AICommander {
       // Survival: the attacker has no base, so allied AIs hold and defend instead of raiding.
       !w.survival &&
       this.state !== 'defend' &&
-      w.tick - this.lastAttackTick > this.diff.attackCooldown &&
+      w.tick - this.lastAttackTick > this.diff.attackCooldown * this.adapt.cooldownFactor &&
       ((w.tick >= firstAttack && this.armyValue(home) >= threshold) || joinAlly)
     ) {
       const target =
@@ -822,6 +985,11 @@ export class AICommander {
         ids: new Set(g.map((u) => u.id)),
         startHp: g.reduce((s, u) => s + u.hp, 0),
         target: t,
+        origin: { x: t.x, y: t.y },
+        settled: { tick: w.tick, dealt: 0, lost: 0 },
+        members: new Map(
+          g.map((u) => [u.id, { cost: u.def.cost, xp0: u.xp, xp: u.xp, hpFrac: u.hp / u.maxHp, alive: true }]),
+        ),
       };
       // Infantry ride in the squad's APCs: they arrive together and protected.
       const waiting = new Set<number>();
@@ -1376,10 +1544,21 @@ export class AICommander {
     const hq = this.hq();
     if (!hq) return;
     if (this.hillPost === null) {
+      // Distance to a hill is measured from its centre (its first tile is always the north-west corner, which
+      // made one spawn see the central plateau as "near" and feed guards into it — v0.16); guards stand on the
+      // hill tiles nearest to our base.
+      const d = (c: { x: number; y: number }[]) => {
+        const mx = c.reduce((s, t) => s + t.x, 0) / c.length;
+        const my = c.reduce((s, t) => s + t.y, 0) / c.length;
+        return Math.hypot(mx - hq.x, my - hq.y);
+      };
       const near = this.hillClusters()
-        .filter((c) => Math.hypot(c[0].x - hq.x, c[0].y - hq.y) < 36)
-        .sort((a, b) => Math.hypot(a[0].x - hq.x, a[0].y - hq.y) - Math.hypot(b[0].x - hq.x, b[0].y - hq.y));
-      this.hillPost = near[0] ?? [];
+        .filter((c) => d(c) < 36)
+        .sort((a, b) => d(a) - d(b));
+      this.hillPost = (near[0] ?? [])
+        .slice()
+        .sort((a, b) => Math.hypot(a.x - hq.x, a.y - hq.y) - Math.hypot(b.x - hq.x, b.y - hq.y))
+        .slice(0, 6);
     }
     const post = this.hillPost;
     if (!post.length) return;
@@ -1468,6 +1647,25 @@ export class AICommander {
   }
 
   /** Nearest remembered enemy building (optionally different from `exclude`), else an unexplored spawn. */
+  /**
+   * Where to look for the enemy: the nearest unexplored scouting target; once all are explored and no enemy building
+   * is known, patrol them in turn (an enemy may have built where we already looked — v0.17).
+   */
+  private searchTarget(): { x: number; y: number } | null {
+    const team = this.player.team;
+    const w = this.world;
+    const unexplored = this.scoutTargets.find((t) => !w.fog.isExplored(team, Math.floor(t.x), Math.floor(t.y)));
+    if (unexplored) return unexplored;
+    if (!this.scoutTargets.length) return null;
+    let t = this.scoutTargets[this.patrolIdx % this.scoutTargets.length];
+    // Move on once the spot is in sight.
+    if (w.fog.isVisible(team, t.x, t.y)) {
+      this.patrolIdx++;
+      t = this.scoutTargets[this.patrolIdx % this.scoutTargets.length];
+    }
+    return t;
+  }
+
   private pickTarget(from: Unit, exclude?: { x: number; y: number }): { x: number; y: number } | null {
     let best: KnownBuilding | null = null;
     let bestD = Infinity;
@@ -1475,7 +1673,8 @@ export class AICommander {
       if (exclude && Math.hypot(k.x - exclude.x, k.y - exclude.y) < 6) continue;
       // Prefer production and economy targets slightly.
       const bias = k.type === 'resource-extractor' || k.type === 'war-factory' ? -4 : 0;
-      const d = Math.hypot(k.x - from.x, k.y - from.y) + bias;
+      // v0.17: places where attacks failed twice are avoided for a while.
+      const d = Math.hypot(k.x - from.x, k.y - from.y) + bias + this.adapt.targetPenalty(k.x, k.y, this.world.tick);
       if (d < bestD) {
         bestD = d;
         best = k;
@@ -1483,11 +1682,7 @@ export class AICommander {
     }
     if (best) return { x: best.x, y: best.y };
     if (exclude) return null;
-    const team = this.player.team;
-    const unexplored = this.scoutTargets.find(
-      (t) => !this.world.fog.isExplored(team, Math.floor(t.x), Math.floor(t.y)),
-    );
-    return unexplored ?? null;
+    return this.searchTarget();
   }
 
   private manageScout(): void {
@@ -1498,7 +1693,7 @@ export class AICommander {
     }
     let scout = this.scoutId !== null ? (w.get(this.scoutId) as Unit | undefined) : undefined;
     if (!scout) {
-      const units = w.playerUnits(this.playerId);
+      const units = w.playerUnits(this.playerId).filter((u) => !u.guard);
       scout =
         units.find((u) => u.type === 'recon-drone') ??
         units.find((u) => u.type === 'recon-vehicle') ??
@@ -1506,8 +1701,7 @@ export class AICommander {
       this.scoutId = scout?.id ?? null;
     }
     if (!scout || scout.moving) return;
-    const team = this.player.team;
-    const target = this.scoutTargets.find((t) => !w.fog.isExplored(team, Math.floor(t.x), Math.floor(t.y)));
+    const target = this.searchTarget();
     if (target) {
       w.issue({ type: 'move', player: this.playerId, units: [scout.id], x: target.x, y: target.y });
       this.lastDecision = 'scouting';

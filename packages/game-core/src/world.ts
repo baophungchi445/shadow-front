@@ -82,6 +82,8 @@ export class World {
   readonly points: ControlPoint[];
   /** Capture the Flag: flags and captures per team (ctf mission only). */
   readonly flags: Flag[] = [];
+  /** v0.17: scratch timers for campaign objectives (e.g. when a forward base started being held). */
+  readonly missionMarks = new Map<string, number>();
   readonly captures = new Map<TeamId, number>();
   /** Domination score per team (domination mission only). */
   readonly scores = new Map<TeamId, number>();
@@ -164,7 +166,7 @@ export class World {
         powerProduced: 0,
         powerUsed: 0,
         defeated: false,
-        spawnIndex: (globalThis as { __swap?: boolean }).__swap ? config.slots.length - 1 - i : i,
+        spawnIndex: i,
         stats: {
           unitsBuilt: 0,
           unitsLost: 0,

@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.17.0 — in progress (offline: adaptive AI, new campaign missions)
+
+- **AI learns during a match** (Normal and up): every attack is judged (enemy losses vs own losses). Bad trades make it
+  gather a bigger army; failing twice at the same place makes it strike elsewhere; a good trade makes it press on.
+  From Hard it also reads your play style — early rushes (bigger home guard), turtling behind turrets (artillery,
+  missile battery), aircraft (SAM sites, anti-air), fleets (submarines). Enemy tactic changes show as a message and
+  are listed on the results screen ("How the enemy adapted"). Easy never adapts.
+- **AI remembers your habits between skirmishes** (Hard / Insane): a style seen in two skirmishes in a row (early
+  attacks, heavy defenses, aircraft, fleets) becomes a habit; the next Hard AI prepares the answer from the first
+  second and tells you so. Settings: "Hard AI remembers my play style" (on by default), the remembered habits and
+  a Forget button. Campaign missions are not affected.
+- **Campaign mission 6 "Iron Convoy"** (Snowfield, snow at night): no base — escort a Mobile Command Vehicle past an
+  ambush to the Frozen Crossroads, deploy it, hold the forward base for 5 minutes (the clock restarts if it falls)
+  while the Iron Guard counter-attacks, then destroy them.
+- **Campaign mission 7 "Shadow Front"** (Forest Warfare, day / night cycle, finale): 2 vs 2 with an allied Hard AI
+  against two Hard commanders that adapt; hold all 3 points at once and destroy both enemy Headquarters.
+- Fixes: the AI never found an enemy that built away from every spawn (it now scouts strategic points and the map
+  centre, then keeps patrolling them); the camera starts on your units when you have no base.
+
+## 0.16.0 — 2026-11-23 (offline: Tidewater mission, random sea maps, AI balance)
+
+- **Campaign mission 5 "Tidewater"** (Strait Crossing, unlocks after Highland Siege): build a Naval Yard, sink 3 enemy ships, land troops
+  and capture the South Shore, destroy the enemy. New player stat: ships lost.
+- **Random map with sea**: a 🌊 Sea option for the random map (remembered) adds an inland sea with a bay at every base ("… Coast", no
+  centre point). With the option off every seed still gives the same map as before. Random map descriptions are translated for every seed.
+- **AI navy**: the Naval Yard keeps building while land production is held, the AI saves up for Destroyers (it never built one before)
+  and pauses the yard for 2 minutes after losing 4 ships in 3 minutes instead of feeding boats one by one.
+- **Fairer spawns** (AI-vs-AI simulations): AI building placement, hill choice and A* tie-breaking no longer favour one map corner;
+  routes are now mirrored on symmetric maps. Paths prefer the straight line between equally long routes.
+- Balance simulations moved to `pnpm --filter @shadow-front/game-ai sim` (not part of `pnpm test`).
+
 ## 0.15.0 — 2026-11-20 (offline: submarines, AI fleets, harbour check)
 
 - **Submarine** (Naval Yard, needs Research Center): always submerged — enemies only see it with sonar (Patrol Boat) within 7 tiles,

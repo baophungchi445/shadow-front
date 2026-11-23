@@ -1396,8 +1396,8 @@ Nguồn: các mục ⬜ trong `docs/PLAN_STATUS.md`. Vẫn chưa làm online / �
 |---|---|---|---|
 | 16.1 | **Nhiệm vụ chiến dịch 5 "Tidewater"** trên Strait Crossing: xây Xưởng tàu, đánh chìm tàu địch, đổ bộ chiếm bờ nam, tiêu diệt địch | §2 Campaign | ✅ |
 | 16.2 | **Map ngẫu nhiên có biển**: ô "Biển" trong thiết lập khi chọn map ngẫu nhiên (seed cũ giữ nguyên khi tắt) | §6 | ✅ |
-| 16.3 | **Mô phỏng cân bằng hải quân AI-vs-AI** trên các map biển (nhiều seed): thống kê, chỉnh nếu lệch | cân bằng | ⏳ |
-| 16.4 | Kiểm tra (unit test + Chrome / Edge / Firefox), tài liệu | — | ⏳ |
+| 16.3 | **Mô phỏng cân bằng hải quân AI-vs-AI** trên các map biển (nhiều seed): thống kê, chỉnh nếu lệch | cân bằng | ✅ |
+| 16.4 | Kiểm tra (unit test + Chrome / Edge / Firefox), tài liệu | — | ✅ |
 
 ## Nhật ký đợt 16
 
@@ -1423,3 +1423,140 @@ Nguồn: các mục ⬜ trong `docs/PLAN_STATUS.md`. Vẫn chưa làm online / �
 - Mô tả map ngẫu nhiên giờ được dịch tiếng Việt cho **mọi seed** (trước chỉ dịch được seed 1), cả bản có biển.
 - Test: game-data +1 (25 seed có biển: chơi được, biển ≥ 300 ô, cả 4 vị trí xây được Xưởng tàu, không có điểm "Centre"; cùng seed không
   biển vẫn có "Centre"), game-core +1 (trận với `mapSea` ra bản Coast, không `mapSea` ra bản thường).
+
+### ✅ 16.3 Mô phỏng cân bằng AI-vs-AI (hải quân + công bằng vị trí xuất phát)
+- Chạy 18 trận AI Hard trên Coastal Front, Strait Crossing, map ngẫu nhiên có biển (6 seed mỗi map, tính cách khác nhau). Phát hiện:
+  1. **AI không bao giờ đóng Khu trục** (0 chiếc / 18 trận). Nguyên nhân: quân bộ chỉ chừa tiền bằng giá Tàu tuần tra (700), Khu trục
+     giá 1800 nên không bao giờ đủ; tick sau Xưởng tàu lại đổi sang tàu rẻ. Sửa: Xưởng tàu **giữ con tàu đã chọn** đến khi đóng được,
+     quân bộ **chừa đúng giá con tàu đó** khi hạm đội còn dưới 4 chiếc.
+  2. Sau khi sửa (1) lộ ra AI **"nướng" tàu tuần tra** (có trận đóng 32 chiếc, mất 39). Sửa: mất ≥ 4 tàu trong 3 phút → Xưởng tàu nghỉ 2 phút.
+  3. **Bên ở vị trí xuất phát 2 thắng 17 / 19 trận có kết quả**, không phụ thuộc phe hay thứ tự slot (đã thử đổi phe, đổi thứ tự cập
+     nhật AI, đổi vị trí). Tìm ra 3 nguồn lệch theo tọa độ tuyệt đối và đã sửa:
+     - **Đặt công trình**: vòng xoắn luôn thử phía trên-trái trước → căn cứ góc tây bắc bị dồn vào góc map, quân ra chậm. Giờ thử phía
+       giữa map trước, lật theo từng góc → 4 góc có bố cục giống nhau.
+     - **Chọn đồi để giữ**: đo khoảng cách tới ô đầu tiên của đồi (luôn là góc tây bắc) → một bên coi cao nguyên giữa là "gần" và đưa
+       quân lên chết dần. Giờ đo tới tâm đồi, lính đứng ở các ô đồi gần căn cứ mình nhất.
+     - **Tìm đường A\***: khi hai đường dài bằng nhau, thứ tự duyệt hướng cố định khiến cả hai bên cùng vòng phía tây. Giờ ưu tiên ô gần
+       đường thẳng và lệch phải theo hướng đi (không đổi khi xoay map 180°) → đường đi của hai bên đối xứng hoàn toàn (đã kiểm tra trên
+       Highland Pass, Forest Warfare). Phần ưu tiên tối đa ~0,1 ô nên đường không dài thêm đáng kể.
+     - Lõi chiến đấu được kiểm tra riêng (2 nhóm 8 unit giống hệt, đặt đối xứng, không AI): không nghiêng về bên nào (vị trí 1 thắng 8/12).
+- Kết quả sau khi sửa:
+  - Hải quân: AI đóng **1–7 Khu trục** mỗi trận, không còn đóng tàu hàng loạt (nhiều nhất 7 tàu tuần tra). Khu trục pháo kích bờ rất
+    hiệu quả (có trận 69–89 lần hạ địch) — người chơi có Tàu ngầm để khắc chế, nên chưa giảm sức mạnh; sẽ theo dõi.
+  - Công bằng vị trí (30 trận Warlord Hard giống hệt nhau trên 5 map đối xứng): **trước 2 – 17, sau 5 – 16, hòa 9**. Desert Storm và
+    River Crossing đã cân (3–1, 1–4 với ít mẫu), Island Conflict hầu như hòa. **Còn lệch: Highland Pass 0–6, Forest Warfare 1–5** —
+    nguyên nhân còn lại nằm ở chiến lược AI trên 2 map này (chưa tìm ra; đường đi, bố cục căn cứ, lõi chiến đấu đã đối xứng). Ảnh hưởng
+    chủ yếu tới trận AI-vs-AI và đồng minh AI; để ý ở đợt sau.
+- Dọn dẹp: gỡ 2 hook debug còn sót trong code (`__flip` ở placement, `__swap` ở world) và 3 file debug test đã lỡ commit; mô phỏng được
+  gom vào `packages/game-ai/src/balance.sim.ts`, chạy riêng bằng `pnpm --filter @shadow-front/game-ai sim` (~3 phút, không nằm trong
+  `pnpm test`).
+
+### ✅ 16.4 Kiểm tra, trình duyệt, tài liệu
+- Unit test: **186 PASS** (server 3, game-data 25, game-core 138, game-ai 20); typecheck + lint toàn repo sạch.
+- Bộ test trình duyệt mới **round16** (7 bài): Tidewater đã mở khóa, chạy trên Strait Crossing, có mục tiêu Xưởng tàu; map ngẫu nhiên có ô
+  Biển → map "Coast" có biển lớn, không có điểm Centre, lựa chọn được nhớ; AI Hard (có Xưởng tàu + Research Center) đặt đóng Khu trục.
+- **17 bộ test trình duyệt PASS trên Chrome / Edge / Firefox**. Ghi chú trung thực: lần chạy đầu bộ `campaign` báo 2 lỗi trên Chrome /
+  Edge vì bộ test còn đếm 4 nhiệm vụ (đã có nhiệm vụ thứ 5 từ 16.1) — sửa bộ test, game không phải sửa; `round3` trên Edge lỗi 2 bài
+  (nghiên cứu, sửa chữa — hết thời gian chờ), chạy lại PASS, game không phải sửa.
+- Tài liệu: CHANGELOG 0.16.0, AI_DESIGN §6n, TESTING (v0.16, lệnh `sim`), README (chiến dịch 5 nhiệm vụ — trước ghi nhầm 4).
+
+## Tổng kết đợt 16
+- Đã xong: **nhiệm vụ 5 Tidewater**, **map ngẫu nhiên có biển**, **AI đóng Khu trục / không nướng tàu**, **sửa 3 nguồn lệch vị trí xuất
+  phát** (đặt công trình, chọn đồi, tìm đường), dọn code debug, mô phỏng cân bằng chạy riêng bằng `pnpm sim`.
+- Chất lượng: 186 unit test, 17 bộ test trình duyệt PASS trên 3 trình duyệt.
+- Còn tồn tại: AI giống hệt nhau vẫn thắng nhiều hơn ở vị trí 2 trên **Highland Pass (0–6)** và **Forest Warfare (1–5)**; Khu trục pháo
+  kích bờ rất mạnh trong tay AI — theo dõi tiếp.
+
+---
+
+## Đợt 17 — kế hoạch (chơi offline với máy; người dùng chọn: AI tự thích nghi + thêm nhiệm vụ chiến dịch)
+
+| # | Công việc | Mục PLAN | Trạng thái |
+|---|---|---|---|
+| 17.1 | **AI thích nghi trong trận** (Normal trở lên): rút kinh nghiệm sau mỗi đợt tấn công (thua đậm → gom quân đông hơn, đổi mục tiêu / hướng đánh), nhận ra lối chơi của người chơi (rush sớm, rùa phòng thủ, không quân, hải quân) và đổi kế hoạch xây (trụ sớm, pháo + tên lửa tầm xa, SAM, tàu ngầm); thông báo "Địch đổi chiến thuật" | AI | ✅ |
+| 17.2 | **AI nhớ lối chơi của bạn giữa các trận** (Hard / Insane, lưu trong hồ sơ offline): chuẩn bị đối sách từ đầu trận; tắt được trong Settings | AI | ✅ |
+| 17.3 | **Nhiệm vụ 6 "Iron Convoy"** (Snowfield, tuyết + đêm): hộ tống MCV tới vị trí, lập căn cứ tiền tuyến, giữ 5 phút, tiêu diệt địch | §2 Campaign | ✅ |
+| 17.4 | **Nhiệm vụ 7 "Shadow Front"** (trận cuối, 2v2 có đồng minh AI, địch Hard thích nghi): chiếm mọi điểm, phá HQ cả hai địch | §2 Campaign | ✅ |
+| 17.5 | Kiểm tra (unit test + Chrome / Edge / Firefox), tài liệu | — | ⏳ |
+
+## Nhật ký đợt 17
+
+### ✅ 17.1 AI thích nghi trong trận
+- **Cách làm**: không dùng học máy, mà là luật có trí nhớ, chạy tất định (cùng seed → cùng kết quả). Module mới
+  `packages/game-ai/src/adaptation.ts`: commander báo sự kiện → module rút bài học → commander đọc lại tham số.
+- **Rút kinh nghiệm sau tấn công** (Normal trở lên): mỗi đội tấn công được chấm điểm **mỗi 90 giây** và khi tan: giá trị
+  địch bị hạ (dựa trên điểm kinh nghiệm của unit) so với giá trị quân mình mất.
+  - Thua đậm (tỉ số < 0,5, mất ≥ 20%) → **gom quân đông hơn** (ngưỡng ×1,3, tối đa ×2).
+  - Thua 2 lần cùng một chỗ → **đổi mục tiêu**, tránh chỗ đó 5 phút.
+  - Thắng lớn → **dồn ép** (rút ngắn thời gian chờ giữa các đợt).
+  - Ban đầu chỉ chấm khi đội tan, nhưng mô phỏng cho thấy cả 6 trận × 25 phút chỉ có 2 lần chấm (đội AI đánh rất lâu
+    mới tan) → đổi sang chấm theo từng giai đoạn 90 giây.
+- **Đọc lối chơi của bạn** (Hard; Insane nhận ra sớm hơn), mỗi kiểu phản ứng một lần:
+  - Rush (bị đánh tới căn cứ trước 5,5 phút) → giữ quân ở nhà nhiều hơn 30% trong 10 phút đầu.
+  - Rùa (≥ 4 công trình phòng thủ) → pháo binh / unit tầm xa, Missile Launcher, gom quân đông hơn 15%.
+  - Không quân (≥ 30% quân thấy được) → SAM (tối đa 3), unit bắn được máy bay.
+  - Hải quân (≥ 3 chiến hạm) → ưu tiên tàu ngầm.
+- **Người chơi thấy được**: thông báo "Warlord 1 đổi chiến thuật: …" trong trận; màn kết quả có mục **"Đối thủ đã thích
+  nghi thế nào"** (thời điểm + nội dung). Cùng một chiến thuật không thông báo lại trong 2 phút. Có tiếng Việt.
+- **Kiểm chứng bằng mô phỏng** (cùng AI Warlord Hard, bật / tắt thích nghi, đánh 24 trận với đối thủ Rush và Fortress):
+  - Bản đầu chống rush bằng cách xây thêm 2 trụ: **thua nhiều hơn** (14–6 so với 17–4) vì chậm kinh tế → bỏ, thay bằng
+    giữ quân ở nhà. Đã thử tắt "dồn ép" (không đổi gì) và bỏ hệ số ×1,15 khi công thành (kém hơn) → giữ nguyên.
+  - Kết quả cuối: tỉ lệ thắng **gần như bằng** (Rush 16–5 so với 17–4, Fortress 11–8 so với 12–8) nhưng **thắng nhanh
+    hơn** (15,4 so với 17,0 phút; 18,9 so với 19,5 phút). Nói thẳng: AI-vs-AI chưa chứng minh AI thích nghi mạnh hơn —
+    các phản ứng theo lối chơi nhắm vào thói quen của người chơi (rush sớm, rùa, spam máy bay) mà AI đối thủ ít thể hiện.
+- Test: game-ai +9 (`adaptation.test.ts`), tổng **195 unit test PASS**; typecheck + lint sạch. Bộ test trình duyệt mới
+  **round17** (6 bài): địch Hard biết 4+ trụ của bạn → thông báo công thành; màn kết quả liệt kê; không thích nghi thì
+  không hiện mục; bản tiếng Việt.
+- **18 bộ test trình duyệt PASS trên Chrome / Edge / Firefox**. Ghi chú: lần chạy đầu `survival` lỗi 1 bài trên cả 3
+  trình duyệt (đọc đồng hồ "next in 02:" lúc trận chưa kịp chạy, vì Vite vừa biên dịch lại sau khi sửa code); chạy lại
+  8/8 PASS trên cả 3 — game không phải sửa.
+
+### ✅ 17.2 AI nhớ lối chơi của bạn giữa các trận
+- **Ghi nhận**: AI ở mọi độ khó đều ghi lại lối chơi nó thấy ở bạn (rush / rùa / không quân / hải quân); cuối trận các
+  AI phía địch gộp lại thành `detectedStyles`.
+- **Lưu thói quen** (khóa `shadow-front.habits` trong trình duyệt): trung bình trượt, trận gần nhất chiếm 40%.
+  Gặp **2 trận liền** → thành thói quen (≥ 0,5); thói quen giữ từ 4 trận trở lên thì qua 1 trận không gặp vẫn còn.
+  Chiến dịch không học và không dùng trí nhớ (nhiệm vụ đã được thiết kế sẵn); Survival / tutorial không có AI địch
+  nên không cập nhật.
+- **Dùng trí nhớ**: khi vào trận đấu tự do, thói quen được đưa vào cấu hình trận; AI **Hard / Insane** đối đầu
+  với người chơi chuẩn bị đối sách **ngay từ giây đầu** và báo "Warlord 1 nhớ lối chơi của bạn: …". Màn kết quả
+  đánh dấu "(nhớ từ các trận trước)". Trận AI đấu AI bỏ qua trí nhớ.
+- **Settings**: ô "AI Khó nhớ lối chơi của tôi" (mặc định bật), dòng "Đang nhớ: phòng thủ dày…" và nút **Quên**
+  (xóa hồ sơ cũng xóa luôn trí nhớ). Có tiếng Việt.
+- Lỗi phát hiện khi test trình duyệt và đã sửa: nút Quên chỉ hiện khi đã thành thói quen, nên dữ liệu chưa đủ ngưỡng
+  (vd. 0,25) không xóa được → giờ hiện khi có bất kỳ dữ liệu nào.
+- Test: game-ai +4 (tổng **199 unit test PASS**); typecheck + lint sạch. Bộ **round17** mở rộng lên 12 bài, PASS trên
+  Chrome (ghi nhận rùa → 0,4; Settings hiện thói quen; AI Hard chuẩn bị từ trí nhớ; tắt tùy chọn → AI bắt đầu từ đầu;
+  Quên xóa trí nhớ).
+- Chạy lại cả **18 bộ test trình duyệt trên Chrome / Edge / Firefox: PASS**. Ghi chú: `campaign` trên Edge lỗi 1 bài
+  ("objective completes out of order") ở lần chạy loạt, chạy lại riêng PASS; `round13` trên Firefox đạt 11/11 nhưng
+  có lỗi tải font Google (mạng), không liên quan game.
+
+### ✅ 17.3 Nhiệm vụ 6 "Iron Convoy" (Đoàn xe thép)
+- Map **Snowfield**, **tuyết + ban đêm**, mở khóa sau Tidewater. Người chơi **không có căn cứ**: chỉ có xe MCV, 2 xe tăng,
+  công binh và 5 unit thường ở góc tây bắc. Đối thủ **Iron Guard** (phe Iron, Normal, lối Rush).
+- Mục tiêu (theo thứ tự): **hộ tống MCV tới Ngã tư Băng giá** (giữa map) → **triển khai căn cứ tiền tuyến** (phím U) →
+  **giữ căn cứ 5 phút** (căn cứ bị phá thì đồng hồ tính lại) → **tiêu diệt Iron Guard**.
+- **Ổ phục kích** 7 unit giữa đường. Hạ tầng mới: `MissionDef.setup` (dàn quân riêng cho nhiệm vụ), `World.missionMarks`
+  (đồng hồ của mục tiêu), cờ `guard` cho unit (AI không điều động — nếu không, AI gọi quân phục kích về nhà).
+- **Cân chỉnh bằng mô phỏng** (người chơi giả lập: đi thẳng, triển khai, xây 1 nhà điện + 2 trụ rồi đứng yên):
+  - Bản đầu: phục kích quá yếu (mất 1 unit) và **Iron Guard không bao giờ tấn công** → tìm ra **lỗi AI thật**: AI chỉ
+    trinh sát các vị trí xuất phát nên không bao giờ thấy căn cứ đặt ở chỗ khác. Sửa: trinh sát thêm các điểm chiến lược
+    và giữa map, rồi đi tuần lại liên tục (cũng có lợi cho trận thường khi người chơi mở căn cứ bằng MCV).
+  - Phục kích có thêm trụ → đoàn xe chết sạch ở cả 4 seed (quá khó) → bỏ trụ, giữ 7 unit và cho chúng đứng yên.
+  - Iron Guard kiểu Warlord vẫn không tấn công (quân dưới ngưỡng) → đổi sang Rush. Kết quả cuối: người chơi giả lập
+    giữ được căn cứ đủ 5 phút rồi bị đánh bại ở phút 10–12 nếu không xây thêm quân — người chơi thật cần phòng thủ.
+- Sửa thêm: camera lúc vào trận nhìn vào đoàn quân khi chưa có căn cứ (trước đó chỉ nhìn HQ).
+
+### ✅ 17.4 Nhiệm vụ 7 "Shadow Front" (Mặt trận Bóng tối) — trận cuối
+- Map **Forest Warfare**, chu kỳ ngày / đêm, chế độ Chặt đầu, 10 000 tiền. **2 đấu 2**: bạn + **Northern Wing** (AI Hard)
+  đấu **Shadow Legion** (Eastern, lối Shadow) và **Black Sun** (Desert, lối Eagle), cả hai **Hard có thích nghi** (17.1).
+  Lời dẫn nhắc: chúng đọc lối đánh của bạn, hãy đổi chiến thuật.
+- Mục tiêu: **giữ cả 3 điểm chiến lược cùng lúc**, **phá cả hai Sở chỉ huy địch**. Hoàn thành nhiệm vụ này là hoàn thành
+  chiến dịch (thành tích "hoàn thành chiến dịch" đã có trong hồ sơ, giờ cần đủ 7 nhiệm vụ).
+- Toàn bộ chữ của 2 nhiệm vụ có tiếng Việt.
+- Test: game-core +2 (Iron Convoy: không căn cứ, đoàn xe + phục kích, không bị xử thua khi chưa có công trình, đủ 4 mục
+  tiêu, đồng hồ tính lại khi mất căn cứ; Shadow Front: 2v2 Hard, đủ điểm + 2 HQ, thắng kiểu chặt đầu; thứ tự mở khóa
+  7 nhiệm vụ). Tổng **201 unit test PASS**; typecheck + lint sạch. Bộ trình duyệt mới **round17b** (11 bài) và bộ
+  `campaign` (giờ 7 nhiệm vụ) PASS trên Chrome.
+

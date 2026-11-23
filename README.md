@@ -4,7 +4,7 @@ Modern-warfare **real-time strategy** game for the browser — 2.5D isometric, b
 economy, hybrid combat and a custom AI Commander. Design source of truth: [`docs/MASTER_GAME_DEVELOPMENT.md`](docs/MASTER_GAME_DEVELOPMENT.md).
 
 > Status: **v0.15 prototype** (English / Tiếng Việt, with a map editor) — playable offline: skirmish vs AI (strategic points, research, repair, transports, formations),
-> **Survival** (enemy waves), **Domination**, **Capture the Flag** and a **Campaign** of 4 missions (starting with a tutorial), on ten maps (two with a navy) plus a random map. Current priority is local play; online co-op (Phases 6–7) has a lobby server
+> **Survival** (enemy waves), **Domination**, **Capture the Flag** and a **Campaign** of 7 missions (starting with a tutorial), on ten maps (two with a navy) plus a random map. Current priority is local play; online co-op (Phases 6–7) has a lobby server
 > foundation only. All battlefield graphics are procedural placeholders, not production art.
 
 ## Requirements

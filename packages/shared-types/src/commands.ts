@@ -1,4 +1,4 @@
-import type { BuildingTypeId, EntityId, PlayerId, ResearchId, TeamId, UnitTypeId } from './ids';
+import type { AiTactic, BuildingTypeId, EntityId, PlayerId, ResearchId, TeamId, UnitTypeId } from './ids';
 import type { TileKind, WeaponType } from './definitions';
 
 /** Group move formation. `spread` = loose blob (default); the others keep shape and move at the slowest unit's speed. */
@@ -86,4 +86,6 @@ export type GameEvent =
   /** Survival: a wave will arrive at (x, y) in `inTicks` ticks. */
   | { type: 'waveIncoming'; wave: number; x: number; y: number; inTicks: number }
   /** Survival: a wave has entered the map. */
-  | { type: 'waveSpawned'; wave: number; x: number; y: number; count: number };
+  | { type: 'waveSpawned'; wave: number; x: number; y: number; count: number }
+  /** v0.17: an AI commander changed its tactics (learned from the match). */
+  | { type: 'aiAdapted'; player: PlayerId; tactic: AiTactic; remembered?: boolean };

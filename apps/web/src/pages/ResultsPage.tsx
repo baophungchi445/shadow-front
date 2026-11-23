@@ -4,6 +4,7 @@ import type { FactionId } from '@shadow-front/shared-types';
 import { useApp } from '../stores/appStore';
 import { hex } from '../components/Icon';
 import { useT } from '../i18n';
+import { AI_TACTIC_TEXT } from '../game/GameController';
 
 export function ResultsPage() {
   const { result, match, go, startMatch, lastProgress } = useApp();
@@ -149,6 +150,26 @@ export function ResultsPage() {
             ))}
           </tbody>
         </table>
+        {result.adaptations.length > 0 && (
+          <div className="mt-4" data-testid="adaptations">
+            <div className="mb-1 text-[11px] uppercase tracking-widest text-gray-500">
+              {t('How the enemy adapted')}
+            </div>
+            <ul className="max-h-28 space-y-0.5 overflow-y-auto text-sm text-gray-300">
+              {result.adaptations.map((a, i) => (
+                <li key={i} className="tabular-nums">
+                  <span className="mr-2 text-gray-500">
+                    {Math.floor(a.sec / 60)}:{String(a.sec % 60).padStart(2, '0')}
+                  </span>
+                  {a.name}: {t(AI_TACTIC_TEXT[a.tactic])}
+                  {a.remembered && (
+                    <span className="ml-2 text-xs text-warn-400">{t('(remembered from earlier matches)')}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <div className="mt-6 flex justify-end gap-2">
           <button className="btn" onClick={() => go('menu')}>
             {t('Main menu')}

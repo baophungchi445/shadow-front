@@ -10,7 +10,8 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "sim": "vitest run -c vitest.sim.config.ts"
   },
   "dependencies": {
     "@shadow-front/shared-types": "workspace:*",

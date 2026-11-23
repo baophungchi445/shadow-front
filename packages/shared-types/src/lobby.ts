@@ -1,4 +1,4 @@
-import type { Difficulty, FactionId, MapId, MissionType, Personality } from './ids';
+import type { Difficulty, FactionId, MapId, MissionType, Personality, PlayStyle } from './ids';
 import type { MapDef } from './definitions';
 
 export type RoomStatus = 'lobby' | 'loading' | 'in-match' | 'results';
@@ -104,4 +104,9 @@ export interface MatchConfig {
   weather?: Weather;
   /** Time of day (missing = day). */
   dayTime?: DayTime;
+  /**
+   * v0.17: the human player's habits remembered from earlier matches (offline profile). Hard / Insane AI commanders
+   * opposing a human prepare their answers from the start. Missing = no memory.
+   */
+  aiMemory?: PlayStyle[];
 }
