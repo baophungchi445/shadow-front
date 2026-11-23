@@ -16,6 +16,12 @@ Medic white helmet + red cross, Engineer yellow helmet + backpack).
 audio files and no licensing to track yet. `assets/audio/{sfx,music}` stays empty until real recordings replace them. Unit and commander
 voices are not implemented.
 
+**3D prototype (v0.19)**: `apps/web/proto3d.html` + `apps/web/src/proto3d/` render a live match in 3D with Three.js
+(procedural low-poly models in `models.ts`: one part per pivot — hull / turret / rotor — and tint — faction paint,
+team colour, fixed, glowing lights). Team colour is limited to stripes, pennants, flags and the ring under units so
+the camouflage reads as military. It is an evaluation build to decide whether the game moves to 3D; glTF models
+would replace `models.ts` part by part if it does.
+
 ## 3. Folder & naming convention
 
 ```text

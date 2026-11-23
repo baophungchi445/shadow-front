@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.19.0 — in progress (3D graphics prototype)
+
+- **3D graphics prototype** at `/proto3d.html` (Three.js; the Phaser game is untouched): a real match — the same
+  World and AI commanders, 2–4 Hard AIs fast-forwarded ~5 minutes — drawn as a "military diorama": tilted camera
+  (pan / zoom / rotate in 90° steps, auto-follow of the fighting), terrain with real hill height, blended ground
+  types and a grain texture, water with shore foam and moving waves, instanced forests / rocks / city blocks / ore,
+  procedural low-poly units and buildings (faction camouflage, team colour only on stripes, flags and the ring under
+  each unit, turrets and rotors that turn), sun shadows, sky ambient light, day / dusk / night, rain / snow /
+  sandstorm, fog of war with soft edges, muzzle flashes, tracers, explosions with smoke and debris, scorch marks,
+  burning wrecks, smoking damaged buildings, flash lights. Low / Medium / High quality, FPS and draw-call stats,
+  "+100 units" stress test.
+- Measured on an Intel UHD 730 (integrated GPU), 1600×900: Low ~100 FPS, Medium 43–59 FPS (~95 units) and ~40 FPS
+  with 150–170 units fighting, High (bloom + SSAO) 11–13 FPS — High is meant for discrete GPUs.
+
 ## 0.18.0 — in progress (offline: fair spawns, finale tuning)
 
 - **Fair spawn corners**: six more ways one corner was favoured were found by running a mirror match tick by tick and
