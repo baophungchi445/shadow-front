@@ -8,7 +8,9 @@ export default defineConfig({
     target: 'es2022',
     chunkSizeWarningLimit: 2000,
     rollupOptions: {
-      output: { manualChunks: { phaser: ['phaser'] } },
+      // v0.19: the 3D graphics prototype is a separate page (proto3d.html).
+      input: { main: 'index.html', proto3d: 'proto3d.html' },
+      output: { manualChunks: { phaser: ['phaser'], three: ['three'] } },
     },
   },
 });

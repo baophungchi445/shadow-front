@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SHADOW FRONT — 3D Prototype</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;500&display=swap" rel="stylesheet" />
+    <style>
+      :root { --panel: rgba(18, 21, 19, 0.72); --line: rgba(140, 170, 110, 0.35); --accent: #8fb35a; --text: #dfe5da; --dim: #98a291; }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; background: #0c0e0d; color: var(--text); font: 13px/1.45 Inter, system-ui, sans-serif; overflow: hidden; }
+      #view { position: fixed; inset: 0; }
+      #view canvas { display: block; }
+      #loading { position: fixed; inset: 0; display: grid; place-items: center; font: 600 20px Rajdhani, sans-serif; letter-spacing: 0.08em; color: var(--accent); background: #0c0e0d; z-index: 10; }
+      .panel { position: fixed; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); box-shadow: 0 6px 24px rgba(0,0,0,0.35); }
+      #hud { top: 12px; left: 12px; width: 300px; }
+      h1 { margin: 0 0 6px; font: 700 17px Rajdhani, sans-serif; letter-spacing: 0.1em; color: var(--accent); }
+      h1 small { color: var(--dim); font-weight: 600; letter-spacing: 0.04em; }
+      #stats { font: 12px ui-monospace, Consolas, monospace; color: var(--text); margin-bottom: 8px; }
+      #stats b { color: var(--accent); font-size: 14px; }
+      .row { display: flex; gap: 4px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
+      .row > span { width: 62px; color: var(--dim); font-size: 12px; }
+      button, select { font: 600 12px Rajdhani, sans-serif; letter-spacing: 0.05em; color: var(--text); background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.14); border-radius: 4px; padding: 4px 8px; cursor: pointer; }
+      button:hover, select:hover { border-color: var(--accent); }
+      button.on { background: rgba(143,179,90,0.25); border-color: var(--accent); color: #eaf5dc; }
+      select { flex: 1; }
+      select option { background: #1a1d1b; }
+      #help { bottom: 12px; left: 12px; color: var(--dim); font-size: 12px; }
+      #help kbd { font: 600 11px ui-monospace, monospace; color: var(--text); border: 1px solid rgba(255,255,255,0.2); border-radius: 3px; padding: 0 4px; }
+      body.nohud .panel { display: none; }
+    </style>
+  </head>
+  <body>
+    <div id="view"></div>
+    <div id="loading">Loading…</div>
+    <div id="hud" class="panel">
+      <h1>SHADOW FRONT <small>3D PROTOTYPE</small></h1>
+      <div id="stats">…</div>
+      <div id="gpu" style="color:var(--dim);font-size:11px;margin:-4px 0 6px"></div>
+      <div class="row"><span>Map</span><select id="map"></select></div>
+      <div class="row"><span>Quality</span><button data-q="low">Low</button><button data-q="medium">Medium</button><button data-q="high">High</button></div>
+      <div class="row"><span>Time</span><select id="time"><option value="day">Day</option><option value="dusk">Dusk</option><option value="night">Night</option></select></div>
+      <div class="row"><span>Weather</span><select id="weather"><option value="clear">Clear</option><option value="rain">Rain</option><option value="snow">Snow</option><option value="sandstorm">Sandstorm</option></select></div>
+      <div class="row"><span>Speed</span><button data-speed="0">Pause</button><button data-speed="1">1×</button><button data-speed="2">2×</button><button data-speed="4">4×</button></div>
+      <div class="row"><span>View</span><button id="follow">Follow action</button><button id="fog">Fog of war</button></div>
+      <div class="row"><span>Camera</span><button id="rotl">⟲ Rotate</button><button id="rotr">Rotate ⟳</button></div>
+      <div class="row"><span>Stress</span><button id="stress">+100 units here</button></div>
+    </div>
+    <div id="help" class="panel">
+      <kbd>WASD</kbd>/drag pan · <kbd>wheel</kbd> zoom · <kbd>Q</kbd>/<kbd>E</kbd> rotate · <kbd>F</kbd> follow · <kbd>V</kbd> fog · <kbd>H</kbd> hide UI
+    </div>
+    <script type="module" src="/src/proto3d/main.ts"></script>
+  </body>
+</html>

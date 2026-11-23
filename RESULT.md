@@ -1646,3 +1646,89 @@ Nguồn: các mục ⬜ trong `docs/PLAN_STATUS.md`. Vẫn chưa làm online / �
 - Còn tồn tại: mô phỏng không thay được người chơi thật — độ khó Iron Convoy / Shadow Front cần bạn chơi thử.
 - Chưa commit.
 
+
+## Đợt 19 — kế hoạch (cảnh thử nghiệm đồ họa 3D)
+
+Mục tiêu: xem tận mắt phong cách "sa bàn quân sự 3D" và đo FPS trước khi quyết định chuyển cả game sang 3D.
+Làm ở trang riêng `/proto3d.html` (Three.js), **không đụng tới game Phaser hiện tại**. Dùng map + mô phỏng thật
+(`World` + 2 AI Commander đánh nhau) để FPS phản ánh trận thật.
+
+| # | Công việc | Trạng thái |
+|---|---|---|
+| 19.1 | Cài Three.js, trang riêng `proto3d.html`, camera (nghiêng ~50°, kéo/zoom/xoay 4 hướng) | ✅ |
+| 19.2 | Địa hình 3D từ map thật: đồi có độ cao, các loại đất hòa vào nhau, nước shader, cây/nhà dùng instancing | ✅ |
+| 19.3 | Lính, xe, máy bay, tàu, nhà bằng khối 3D low-poly; màu đội ở sọc/vòng chân | ✅ |
+| 19.4 | Ánh sáng + hậu kỳ: bóng mặt trời, SSAO, bloom, tone mapping, chỉnh màu; hiệu ứng bắn/nổ/khói/vết cháy | ✅ |
+| 19.5 | Mức Low / Medium / High + bộ đếm FPS + nút "stress test" | ✅ |
+| 19.6 | Kiểm tra (typecheck, lint, build, chụp màn hình trình duyệt, đo FPS) | ✅ |
+
+## Nhật ký đợt 19
+
+### ✅ 19.1 Three.js, trang riêng, camera
+- Cài `three@0.170.0` (+ `@types/three`). Trang mới `apps/web/proto3d.html` → `src/proto3d/main.ts`; Vite build thêm
+  đầu vào `proto3d`, Three.js tách chunk riêng nên **game chính không tải thêm gì**.
+- Trận thật: `World` + 2–4 AI Hard (phe Western / Eastern / Desert / Pacific), mô phỏng nhanh ~5 phút trước khi vẽ
+  (`?t=` đổi số giây) để quân đã ra trận.
+- Camera (`camera.ts`): nghiêng 52°, góc nhìn hẹp (32°) gần cảm giác isometric; kéo chuột / WASD / mép màn hình,
+  lăn chuột zoom, Q / E xoay 90° có làm mượt; "Follow action" tự bay tới chỗ đánh nhau ác liệt nhất / vụ nổ lớn.
+
+### ✅ 19.2 Địa hình 3D
+- `terrain.ts`: lưới 2 đỉnh / ô; đồi có độ cao thật (cùng công thức nội suy với bản 2D), lòng sông / biển trũng xuống.
+- Màu đất trộn mượt giữa các ô (đường / bê tông giữ nét), thêm nhiễu mảng lớn + texture hạt lặp liền mạch.
+- Nước: vá shader `MeshStandardMaterial` — sóng chuyển động (nhiễu pháp tuyến), nước nông / sâu theo khoảng cách bờ,
+  viền bọt mảnh vỗ bờ, phản chiếu bầu trời.
+- Rừng (cây thông low-poly), đá, khối nhà đô thị, tinh thể quặng: mỗi loại 1 lần vẽ (instancing); dựng lại khi địa
+  hình bị phá. Viền đất ngoài map để camera không thấy khoảng trống.
+
+### ✅ 19.3 Lính, xe, máy bay, tàu, nhà
+- `models.ts`: mô hình low-poly bằng code cho **25 loại unit + 19 loại nhà** (xe tăng có xích + tháp pháo quay,
+  trực thăng cánh quạt quay — Chinook 2 cánh, máy bay phản lực, tàu khu trục, tàu ngầm nửa chìm, nhà máy điện có
+  tháp làm mát nhả hơi, radar quay, giàn khoan…).
+- Mỗi mô hình chia phần theo trục xoay (thân / tháp pháo / cánh quạt) và kiểu màu (sơn ngụy trang theo phe, màu đội,
+  màu cố định, đèn phát sáng) → `entities.ts` vẽ mỗi loại × mỗi phần bằng 1 `InstancedMesh`.
+- Màu đội chỉ ở **sọc, cờ đuôi, vòng dưới chân**; xe nghiêng theo dốc, bộ binh nhún khi đi, máy bay chao, tàu dập
+  dềnh; thanh máu khi bị thương; xác xe cháy đen rồi lún dần; nhà đang xây mọc dần, chưa có màu đội.
+
+### ✅ 19.4 Ánh sáng, hậu kỳ, hiệu ứng
+- `stage.ts`: mặt trời có bóng mềm (khung bóng bám theo camera, khóa theo texel để không rung), ánh sáng bầu trời
+  (environment map tạo từ dải màu trời), tone mapping ACES, sương xa. 3 bảng màu theo map (ôn đới / sa mạc / tuyết) ×
+  3 thời điểm (ngày / hoàng hôn / đêm); đêm có đèn cửa sổ, đèn đường băng, đèn đỏ đỉnh cột.
+- Chỉnh màu + vignette bằng CSS (gần như không tốn GPU). Bloom + SSAO chỉ ở mức High.
+- `effects.ts`: hạt lửa / khói / tia lửa / mảnh vỡ (CPU, 1 lần vẽ mỗi loại), chớp đầu nòng, đạn vạch sáng, rocket kéo
+  khói, đạn pháo bay vòng cung, nổ (chớp + cầu lửa + cột khói + mảnh văng + vết cháy), đèn chớp chiếu sáng đất,
+  rung camera khi nổ lớn, nhà hư hại bốc khói / cháy, màn khói. Thời tiết: mưa, tuyết, bão cát (bụi + sương màu cát).
+- Sương mù chiến tranh (`fow.ts`): texture tầm nhìn từng ô lọc tuyến tính → viền mềm; vùng đã khám phá tối + giảm màu,
+  vùng chưa khám phá gần đen; lính địch ngoài tầm nhìn bị ẩn.
+
+### ✅ 19.5 Mức chất lượng, FPS, stress test
+- Bảng thông số: FPS + khung chậm nhất, số unit / nhà / hạt, draw call, tam giác, thời gian CPU (mô phỏng / cảnh /
+  gửi lệnh GL), tên GPU. Nút "+100 units here" sinh 2 đạo quân 50 unit lao vào nhau ngay giữa màn hình.
+- **Đo trên máy bạn (Intel UHD 730, card tích hợp, 1600×900)** rồi chỉnh lại các mức:
+
+  | Mức | Gồm | FPS |
+  |---|---|---|
+  | Low | không bóng, không đèn chớp, độ phân giải 0,85 | ~100 |
+  | Medium | bóng 2048, 4 đèn chớp, khử răng cưa gốc | 43–59 (~95 unit) · ~40 khi 150–170 unit đánh nhau |
+  | High | + bloom, SSAO, MSAA, bóng 4096, 8 đèn | 11–13 (dành cho card rời) |
+
+  Đo từng hiệu ứng: chuỗi hậu kỳ MSAA half-float + bloom ăn ~½ FPS (Medium lúc đầu chỉ 19–28 FPS) → Medium bỏ hậu
+  kỳ, vẽ thẳng ra màn hình. CPU rất nhẹ (~2 ms / khung kể cả 170 unit) — giới hạn hoàn toàn ở GPU.
+
+### ✅ 19.6 Kiểm tra
+- Typecheck + lint sạch; `vite build` ra 2 trang (`index.html`, `proto3d.html`).
+- Trình duyệt (Chrome): 9 map, mọi thời tiết, ngày / hoàng hôn / đêm, sương mù chiến tranh, stress test — **không lỗi
+  console**. Ảnh chụp đã xem từng ảnh; các lỗi nhìn thấy đã sửa: mặt đất ngoài map đè lên lòng sông, bọt sóng phủ
+  trắng cả con sông, vân xoáy ở texture đất, đá quá to, màu đội phủ kín thân xe / mái boong-ke / mui xe tải / mũi pháo
+  tự hành, nhà đang xây hiện thành tấm phẳng màu đội, đêm quá tối và đèn cửa sổ cháy trắng.
+- Game cũ: bộ `tutorial` (lần đầu lỗi đúng lúc Vite khởi động lại sau khi đổi cấu hình; chạy lại 12/12), `campaign`
+  11/11, `round17b` 11/11 — PASS, không lỗi console.
+
+## Tổng kết đợt 19
+- Có **cảnh thử nghiệm 3D chạy trận thật** tại `http://localhost:5173/proto3d.html` (chạy `pnpm dev`). Thử:
+  `?map=forest-warfare&time=dusk`, `?map=snowfield&weather=snow`, `?map=island-conflict&weather=rain`, `?q=high`.
+- Trên card tích hợp: Medium chơi được (40–59 FPS), Low rất mượt; High cần card rời.
+- Giới hạn trung thực: mô hình là khối hình học tự dựng (chưa phải model thật); chưa chọn / ra lệnh cho lính (chỉ
+  xem); chưa có minimap / HUD game; High chậm trên máy này.
+- Bước tiếp theo nếu chọn 3D: chuyển dần theo kiểu 2 bộ vẽ song song (công tắc 2D / 3D), lần lượt chọn quân + ra
+  lệnh, đặt nhà, HUD + minimap; sau đó thay mô hình bằng glTF.
+- Chưa commit.

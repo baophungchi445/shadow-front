@@ -156,6 +156,15 @@ HUD clicks not reaching the battlefield, pause stopping the simulation, surrende
   checkbox gives a "Coast" map with a big sea and no Centre, choice remembered; a Hard AI given a yard and Research Center queues a
   Destroyer.
 
+## v0.19 additions
+
+- 3D prototype (no unit tests — it only draws an existing simulation): browser script `p3d.cjs` loads
+  `/proto3d.html` with a query (map, quality, time, weather, `t` = seconds fast-forwarded), runs `eval:` steps
+  (camera, time of day, fog, stress test) and saves screenshots, then prints the stats panel (FPS, draw calls,
+  CPU ms) and console errors; `p3dbench.cjs` measures FPS with one Medium setting changed at a time (shadows, bloom,
+  MSAA, lights, AO). Checked on 9 maps / all weathers / day, dusk, night: no console errors.
+- Existing suites `tutorial`, `campaign`, `round17b` (Chrome) still pass with the new page in the Vite build.
+
 ## v0.18 additions
 
 - `pnpm sim` adds "campaign finale": Shadow Front with a Hard AI standing in for the player (8 seeds).
